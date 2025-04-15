@@ -6,19 +6,17 @@ from itertools import combinations
 
 # Define the directory where the Excel files are located
 #directory = './tablak/'
-directory = './generalt_tablak/'
+random_directory = './generalt_tablak/'
+prefect_directory = './perfect_tables/'
 
 # Allowed values in the colored schedule table
 allowed_values = {-2, 0, 1, 2}
 
-def initialize_draw_structure(no_of_weeks):
+def initialize_empty_draw_structure(no_of_weeks, time_slots, days_of_week):
     """
-    Initializes the data structure for 16 weeks, each with 5 days (Monday to Friday),
-    6 time slots per day (17:00-18:00, ..., 22:00-23:00), and 4 pitches per time slot.
-    All time slots and pitches are initialized as empty.
+    Initializes the data structure for the final draw,
+    4 pitches per time slot, all time slots and pitches are initialized as empty.
     """
-    time_slots = ['17:00-18:00', '18:00-19:00', '19:00-20:00', '20:00-21:00', '21:00-22:00', '22:00-23:00']
-    days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     
     schedule = {}
     
@@ -36,6 +34,10 @@ def initialize_draw_structure(no_of_weeks):
     return schedule
 
 def add_occupied_times(draw_structure):
+    """
+    Adding all of the pre-occupied timeslots to the drawstructure
+    """
+    #right now i just add 1 timeslot
     draw_structure["Week 14"]["Monday"]["20:00-21:00"][2] = "OCCUPIED TIMESLOT"
     return draw_structure
 
@@ -102,7 +104,7 @@ def process_excel_file(excel_file):
         print(f"Error: Failed to process file {excel_file}: {e}")
         return None, None, None
 
-def get_input_data_and_sort_to_leagues():
+def get_input_data_and_sort_to_leagues(directory):
     leagues = [{}, {}, {}, {}, {}]
     # Get the full paths of all Excel files in the directory
     excel_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.xlsx')]
@@ -118,10 +120,11 @@ def get_input_data_and_sort_to_leagues():
                 print(f"Error: Unknown league {league} for team {team_name}")
 
     # Now you have five dictionaries for each league
-    for i in range(5):
-        print(f"Teams in League {i+1}: {len(leagues[i].keys())}")
-        print(leagues[i].keys())
-        print("")
+    if directory != prefect_directory:
+        for i in range(5):
+            print(f"Teams in League {i+1}: {len(leagues[i].keys())}")
+            print(leagues[i].keys())
+            print("")
 
     return leagues
 
@@ -283,18 +286,38 @@ def calculate_metric(draw_structure, leagues):
 
     return total_metric, number_of_matches, value_counts
 
+def calculate_metric_for_perfect_sort():
+    perfect_sort = np.load('random_sort.npy', allow_pickle='TRUE').item()
+
+    perfect_leagues = get_input_data_and_sort_to_leagues(prefect_directory)
+
+    metric, _, value_counts = calculate_metric(perfect_sort, perfect_leagues)
+
+    print("With a perfect sort:")
+
+    print("")
+    print("METRIC:")
+    print(metric)
+
+    print("")
+    print("Match avaliability:")
+    print("[bad, no answer, might, good]")
+    print(value_counts)
+
 if __name__ == "__main__":
 
     number_of_weeks = 16
-    draw_structure = initialize_draw_structure(number_of_weeks)
+    time_slots = ['17:00-18:00', '18:00-19:00', '19:00-20:00', '20:00-21:00', '21:00-22:00', '22:00-23:00']
+    days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+
+    draw_structure = initialize_empty_draw_structure(number_of_weeks, time_slots, days_of_week)
 
     draw_structure = add_occupied_times(draw_structure)
 
-    leagues = get_input_data_and_sort_to_leagues()
+    leagues = get_input_data_and_sort_to_leagues(random_directory)
 
     devided_leagues, division_counts = devide_leagues(leagues)
     visualize_devided_leagues(devided_leagues, division_counts)
-
 
     leagues_all_games = create_all_pairs(devided_leagues)
     visualize_league_games(leagues_all_games)
@@ -331,6 +354,10 @@ if __name__ == "__main__":
     print("[bad, no answer, might, good]")
     print(value_counts)
 
-    # Print a portion of the structure to show how it looks
-    #from pprint import pprint  # pprint helps to print nested structures in a readable format
-    #pprint(draw_structure['Week 1']['Monday'])  # Print Monday schedule of Week 1 as an example
+    sould_save_random_sort = False
+    we_are_calculating_metric_for_perfect_sort = True
+
+    if sould_save_random_sort:
+        np.save('random_sort.npy', draw_structure)
+    if we_are_calculating_metric_for_perfect_sort:
+        calculate_metric_for_perfect_sort()
