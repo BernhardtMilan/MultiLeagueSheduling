@@ -191,7 +191,7 @@ def create_all_pairs(leagues):
         league_num += 1
     return leagues_all_games
 
-def visualize_league_games(leagues_all_games):
+def visualize_league_games(leagues_all_games, division_counts):
     # Reset original league and subdivision indices for printing the games
     original_league_number = 1
     subdivision_index = 1
@@ -304,8 +304,7 @@ def calculate_metric_for_perfect_sort():
     print("[bad, no answer, might, good]")
     print(value_counts)
 
-if __name__ == "__main__":
-
+def main():
     number_of_weeks = 16
     time_slots = ['17:00-18:00', '18:00-19:00', '19:00-20:00', '20:00-21:00', '21:00-22:00', '22:00-23:00']
     days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
@@ -320,7 +319,7 @@ if __name__ == "__main__":
     visualize_devided_leagues(devided_leagues, division_counts)
 
     leagues_all_games = create_all_pairs(devided_leagues)
-    visualize_league_games(leagues_all_games)
+    visualize_league_games(leagues_all_games, division_counts)
 
     draw_structure = sort_random_matches(draw_structure, leagues_all_games)
 
@@ -355,9 +354,13 @@ if __name__ == "__main__":
     print(value_counts)
 
     sould_save_random_sort = False
-    we_are_calculating_metric_for_perfect_sort = True
+    we_are_calculating_metric_for_perfect_sort = False
 
     if sould_save_random_sort:
         np.save('random_sort.npy', draw_structure)
     if we_are_calculating_metric_for_perfect_sort:
         calculate_metric_for_perfect_sort()
+    
+    return(draw_structure, leagues, leagues_all_games)
+
+main()
