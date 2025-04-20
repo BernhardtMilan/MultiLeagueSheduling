@@ -4,41 +4,45 @@ import numpy as np
 import random
 from itertools import combinations
 
+from schedule_validator import ScheduleValidator, parse_occupied_rule #need to fix circle import add refactor somewhere else
+from init import *
+
 # Define the directory where the Excel files are located
 #directory = './tablak/'
-random_directory = './generalt_tablak/'
-prefect_directory = './perfect_tables/'
 
-# Allowed values in the colored schedule table
-allowed_values = {-2, 0, 1, 2}
-
-def initialize_empty_draw_structure(no_of_weeks, time_slots, days_of_week):
+def initialize_empty_draw_structure():
     """
     Initializes the data structure for the final draw,
     4 pitches per time slot, all time slots and pitches are initialized as empty.
     """
-    
+
     schedule = {}
-    
-    for week in range(1, no_of_weeks+1):
-        week_key = f"Week {week}"
+
+    for week_key in weeks:
         schedule[week_key] = {}
-        
+
         for day in days_of_week:
             schedule[week_key][day] = {}
-            
+
             for time_slot in time_slots:
                 # Initialize 4 pitches per time slot, each pitch starts empty
-                schedule[week_key][day][time_slot] = {1: "", 2: "", 3: "", 4: ""}
-    
+                schedule[week_key][day][time_slot] = {
+                    1: "", 2: "", 3: "", 4: ""
+                }
+
     return schedule
 
 def add_occupied_times(draw_structure):
-    """
-    Adding all of the pre-occupied timeslots to the drawstructure
-    """
-    #right now i just add 1 timeslot
-    draw_structure["Week 14"]["Monday"]["20:00-21:00"][2] = "OCCUPIED TIMESLOT"
+    pitches = [1, 2, 3, 4]
+
+    for rule in occupied_rules:
+        slots_to_occupy = parse_occupied_rule(rule, days_of_week, time_slots, pitches)
+        for (week, day, time, pitch) in slots_to_occupy:
+            if week in draw_structure and day in draw_structure[week] and time in draw_structure[week][day]:
+                draw_structure[week][day][time][pitch] = "OCCUPIED TIMESLOT"
+            else:
+                print(f"Invalid slot location in rule: {rule}")
+
     return draw_structure
 
 # Function to process a single Excel file
@@ -87,11 +91,8 @@ def process_excel_file(excel_file):
         # Initialize a dictionary to store the schedule for this team
         schedule = {}
 
-        # Days of the week
-        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-
         # Populate the schedule dictionary for this team (skip the "Time" column)
-        for i, day in enumerate(days, start=1):
+        for i, day in enumerate(days_of_week, start=1):
             schedule[day] = {}
             for j in range(len(schedule_df)):
                 time_slot = schedule_df.iloc[j, 0]  # The time (first column)
@@ -305,11 +306,8 @@ def calculate_metric_for_perfect_sort():
     print(value_counts)
 
 def main():
-    number_of_weeks = 16
-    time_slots = ['17:00-18:00', '18:00-19:00', '19:00-20:00', '20:00-21:00', '21:00-22:00', '22:00-23:00']
-    days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-
-    draw_structure = initialize_empty_draw_structure(number_of_weeks, time_slots, days_of_week)
+    
+    draw_structure = initialize_empty_draw_structure()
 
     draw_structure = add_occupied_times(draw_structure)
 
@@ -353,6 +351,10 @@ def main():
     print("[bad, no answer, might, good]")
     print(value_counts)
 
+    print(" ")
+    print("Validating schedule...")
+    ScheduleValidator(draw_structure, devided_leagues, division_counts)
+
     sould_save_random_sort = False
     we_are_calculating_metric_for_perfect_sort = False
 
@@ -361,6 +363,6 @@ def main():
     if we_are_calculating_metric_for_perfect_sort:
         calculate_metric_for_perfect_sort()
     
-    return(draw_structure, leagues, leagues_all_games)
+    return(draw_structure, leagues)
 
 main()

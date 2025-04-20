@@ -3,18 +3,15 @@ import copy
 import matplotlib.pyplot as plt
 
 from sorsolo import main, calculate_metric
+from init import *
 
-weeks = [f"Week {i}" for i in range(1, 17)]
-days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-time_slots = ['17:00-18:00', '18:00-19:00', '19:00-20:00',
-              '20:00-21:00', '21:00-22:00', '22:00-23:00']
 pitches = [1, 2, 3, 4]
 
 best_metrics = []
 
 POPULATION_SIZE = 8
 SURVIVORS = 4
-GENERATIONS = 2000
+GENERATIONS = 100
 
 def random_match_changes(draw_structure):
     mutated_draw = draw_structure
@@ -22,7 +19,7 @@ def random_match_changes(draw_structure):
     # Gather all slots that are NOT 'OCCUPIED TIMESLOT'
     swappable_slots = []
     for week in weeks:
-        for day in days:
+        for day in days_of_week:
             for time in time_slots:
                 for pitch in pitches:
                     content = mutated_draw[week][day][time][pitch]
@@ -47,7 +44,7 @@ def random_match_changes(draw_structure):
     return mutated_draw
 
 if __name__ == "__main__":
-    draw, leagues, leagues_all_games = main()
+    draw, leagues = main()
 
     # Start with 10 mutated versions of the original draw
     draws = [random_match_changes(copy.deepcopy(draw)) for _ in range(POPULATION_SIZE)]
