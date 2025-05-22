@@ -2,8 +2,9 @@ import random
 import copy
 import matplotlib.pyplot as plt
 
-from sorsolo import main, calculate_metric
+from sorsolo import initial_sort, calculate_metric, generate_output
 from init import *
+from weights import weights
 
 pitches = [1, 2, 3, 4]
 
@@ -11,7 +12,7 @@ best_metrics = []
 
 POPULATION_SIZE = 8
 SURVIVORS = 4
-GENERATIONS = 100
+GENERATIONS = 5000
 
 def random_match_changes(draw_structure):
     mutated_draw = draw_structure
@@ -44,7 +45,8 @@ def random_match_changes(draw_structure):
     return mutated_draw
 
 if __name__ == "__main__":
-    draw, leagues = main()
+    #draw, leagues = initial_sort(prefect_directory)
+    draw, leagues, possible_max_metric = initial_sort(random_directory)
 
     # Start with 10 mutated versions of the original draw
     draws = [random_match_changes(copy.deepcopy(draw)) for _ in range(POPULATION_SIZE)]
@@ -53,12 +55,12 @@ if __name__ == "__main__":
         # Evaluate all current draws
         evaluated = []
         for i, d in enumerate(draws):
-            metric, _, value_counts = calculate_metric(d, leagues)
+            metric, _, _, value_counts = calculate_metric(d, leagues)
             evaluated.append((metric, d))
 
             # Print only every 10th generation
-            if (generation + 1) % 10 == 0:
-                print(f"Draw {i+1}: METRIC = {metric}")
+            #if (generation + 1) % 10 == 0:
+            #    print(f"Draw {i+1}: METRIC = {metric}")
 
         # Sort by metric (lower is better)
         evaluated.sort(key=lambda x: -x[0])
@@ -69,11 +71,12 @@ if __name__ == "__main__":
 
         # Print best metrics of the generation
         if (generation + 1) % 10 == 0:
-            print(f"\n🌱 Generation {generation + 1}")
-            print("-" * 30)
-            print("💡 Best metrics this gen:")
+            print(f"\nGeneration {generation + 1}")
+            #print("-" * 30)
+            #print("Best metrics this gen:")
             for i, (metric, _) in enumerate(best):
-                print(f"  {i+1}. {metric}")
+                if i < 2:
+                    print(f"  {i+1}. {metric}")
             print("")
 
         # Create next gen
@@ -92,19 +95,33 @@ if __name__ == "__main__":
     final_metrics = [(calculate_metric(d, leagues), d) for d in draws]
     final_metrics.sort(key=lambda x: -x[0][0])  # Sort by metric
 
-    best_metric, _, best_value_counts = final_metrics[0][0][0], final_metrics[0][0][1], final_metrics[0][0][2]
+    best_metric, best_scores, _, best_value_counts = final_metrics[0][0][0], final_metrics[0][0][1], final_metrics[0][0][2], final_metrics[0][0][3]
 
-    print("\n🏁 FINAL BEST RESULT")
+    best_draw = final_metrics[0][1]
+    generate_output(best_draw, filename="best_draw_output_from_evolutionary.xlsx")
+
+    print("\nFINAL BEST RESULT")
     print("----------------------------")
     print(f"Best METRIC: {best_metric}")
+    print("[total_availability_score, bunching_penalty, idle_gap_penalty, spread_reward]")
+    print("Final best draw scores:")
+    print(best_scores)
+    print("Weighted scores:")
+    print(f'[{weights["availability"] * best_scores[0]}, {weights["match_bunching_penalty"] * best_scores[1]}, {weights["idle_gap_penalty"] * best_scores[2]}, {weights["spread_reward"] * best_scores[3]}]')
+    print("")
     print("Final best draw value_counts:")
     print(best_value_counts)
+    print("[bad, no answer, might, good]")
 
     plt.figure(figsize=(8, 5))
-    plt.plot(range(1, GENERATIONS + 1), best_metrics, marker='o')
-    plt.title("Best Metric Score per Generation")
+    plt.plot(range(1, GENERATIONS + 1), best_metrics, marker='o', label='Best Metric per Generation')
+
+    plt.axhline(y=possible_max_metric, color='red', linestyle='--', label='Max Metric')
+
+    plt.title(f"Best Metric Score per Generation with {POPULATION_SIZE} individuals")
     plt.xlabel("Generation")
     plt.ylabel("Best Metric")
+    plt.legend()
     plt.grid(True)
     plt.tight_layout()
     plt.show()

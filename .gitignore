@@ -5,3 +5,5 @@ venv/
 promptok.txt
 *.png
 __pycache__/
+*.pdf
+*.xlsx
