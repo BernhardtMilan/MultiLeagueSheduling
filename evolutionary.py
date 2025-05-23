@@ -1,6 +1,7 @@
 import random
 import copy
 import matplotlib.pyplot as plt
+import numpy as np
 
 from sorsolo import initial_sort, calculate_metric, generate_output
 from init import *
@@ -13,6 +14,16 @@ best_metrics = []
 POPULATION_SIZE = 16
 SURVIVORS = 8
 GENERATIONS = 20000
+
+def fancy_log(generation, metric, prev_metric, max_metric=4400):
+    progress_pct = (metric / max_metric) * 100
+    gain = metric - prev_metric
+    bar_length = 30
+    filled_length = int(progress_pct / 100 * bar_length)
+    bar = "=" * filled_length + " " * (bar_length - filled_length)
+
+    print(f"\nGeneration {generation:3d} | Best Metric: {metric:.1f} | change in last 10 gen: {gain:+.1f}")
+    #print(f"Progress: [{bar}] {progress_pct:.2f}% of max")
 
 def random_match_changes(draw_structure):
     mutated_draw = draw_structure
@@ -64,11 +75,17 @@ def random_match_changes(draw_structure):
     return mutated_draw
 
 if __name__ == "__main__":
-    #draw, leagues = initial_sort(prefect_directory)
-    draw, leagues, possible_max_metric = initial_sort(random_directory)
+    #draw, leagues, possible_max_metric = initial_sort(random_directory)
+    draw, leagues, possible_max_metric = initial_sort(prefect_directory)
 
     # Start with 10 mutated versions of the original draw
     draws = [random_match_changes(copy.deepcopy(draw)) for _ in range(POPULATION_SIZE)]
+
+    generations_completed = 0
+
+    patience = 20  # How many generations to wait for improvement
+    min_delta = 0.001  # Minimum improvement required
+    stagnation_counter = 0
 
     for generation in range(GENERATIONS):
         # Evaluate all current draws
@@ -86,17 +103,27 @@ if __name__ == "__main__":
         best = evaluated[:SURVIVORS]
 
         # Record best metric of this generation
-        best_metrics.append(best[0][0])
+        current_best_metric = best[0][0]
+
+        # ⏸ EARLY STOPPING LOGIC
+        if len(best_metrics) > patience:
+            if current_best_metric - max(best_metrics[-patience:]) < min_delta:
+                stagnation_counter += 1
+            else:
+                stagnation_counter = 0  # Reset if improvement found
+
+            if stagnation_counter >= patience:
+                print(f"\nEarly stopping at generation {generation + 1} due to no significant improvement.")
+                break
+        
+        best_metrics.append(current_best_metric)
 
         # Print best metrics of the generation
-        if (generation + 1) % 10 == 0:
-            print(f"\nGeneration {generation + 1}")
-            #print("-" * 30)
-            #print("Best metrics this gen:")
-            for i, (metric, _) in enumerate(best):
-                if i < 2:
-                    print(f"  {i+1}. {metric}")
-            print("")
+        if generation % 10 == 0:
+            if len(best_metrics) > 10:
+                fancy_log(generation, current_best_metric, best_metrics[-11], possible_max_metric)
+            else: # IF there is no previous generation to compare to
+                fancy_log(generation, current_best_metric, current_best_metric, possible_max_metric)
 
         # Create next gen
         new_draws = []
@@ -109,6 +136,7 @@ if __name__ == "__main__":
             new_draws.append(random_match_changes(seed))
 
         draws = new_draws
+        generations_completed += 1
 
     # Get the final best draw after all generations
     final_metrics = [(calculate_metric(d, leagues), d) for d in draws]
@@ -133,9 +161,14 @@ if __name__ == "__main__":
     print("[bad, no answer, might, good]")
 
     plt.figure(figsize=(8, 5))
-    plt.plot(range(1, GENERATIONS + 1), best_metrics, marker='o', label='Best Metric per Generation')
+    plt.plot(range(1, generations_completed + 1), best_metrics, marker='o', label='Best Metric per Generation')
 
     plt.axhline(y=possible_max_metric, color='red', linestyle='--', label='Max Metric')
+
+    best_gen = np.argmax(best_metrics)
+    best_val = max(best_metrics)
+    plt.plot(best_gen, best_val, 'ro')
+    plt.text(best_gen, best_val, f"  Best: {best_val:.0f}", color='red')
 
     plt.title(f"Best Metric Score per Generation with {POPULATION_SIZE} individuals")
     plt.xlabel("Generation")
