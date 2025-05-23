@@ -10,30 +10,49 @@ pitches = [1, 2, 3, 4]
 
 best_metrics = []
 
-POPULATION_SIZE = 8
-SURVIVORS = 4
-GENERATIONS = 5000
+POPULATION_SIZE = 16
+SURVIVORS = 8
+GENERATIONS = 20000
 
 def random_match_changes(draw_structure):
     mutated_draw = draw_structure
 
     # Gather all slots that are NOT 'OCCUPIED TIMESLOT'
     swappable_slots = []
+    # all slots with a match
+    match_slots = []
+    # all slots without a match
+    empty_slots = []
     for week in weeks:
         for day in days_of_week:
             for time in time_slots:
                 for pitch in pitches:
                     content = mutated_draw[week][day][time][pitch]
-                    if content != "OCCUPIED TIMESLOT":
-                        swappable_slots.append((week, day, time, pitch))
+                    if content == "OCCUPIED TIMESLOT":
+                        continue
+                    slot = (week, day, time, pitch)
+                    if isinstance(content, tuple):
+                        match_slots.append(slot)
+                    elif content == "":
+                        empty_slots.append(slot)
 
-    # Ensure we have at least 2 slots to swap
-    if len(swappable_slots) < 2:
+    # Ensure we have at least 2 slots to swap and at least 1 match slot
+    if not match_slots:
         return mutated_draw
 
-    # Randomly pick two different swappable slots
-    slot1, slot2 = random.sample(swappable_slots, 2)
+    # select 1 match slot, so we cant swap two empty slots
+    slot1 = random.choice(match_slots)
 
+    # Pick a second slot (any valid non-occupied one, different from slot1)
+    swappable_slots = match_slots + empty_slots
+    swappable_slots.remove(slot1)
+
+    if len(swappable_slots) < 1:
+        return mutated_draw
+
+    slot2 = random.choice(swappable_slots)
+
+    # Swap the contents
     w1, d1, t1, p1 = slot1
     w2, d2, t2, p2 = slot2
 
