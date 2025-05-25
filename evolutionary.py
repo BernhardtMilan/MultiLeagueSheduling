@@ -12,7 +12,7 @@ pitches = [1, 2, 3, 4]
 best_metrics = []
 
 POPULATION_SIZE = 16
-SURVIVORS = 8
+SURVIVORS = 4
 GENERATIONS = 20000
 
 def fancy_log(generation, metric, prev_metric, max_metric=4400):
@@ -74,9 +74,60 @@ def random_match_changes(draw_structure):
 
     return mutated_draw
 
+def match_change_no_same_week_no_same_day(draw_structure):
+    mutated_draw = draw_structure
+
+    # Gather all valid slots
+    match_slots = []
+    empty_slots = []
+
+    for week in weeks:
+        for day in days_of_week:
+            for time in time_slots:
+                for pitch in pitches:
+                    content = mutated_draw[week][day][time][pitch]
+                    if content == "OCCUPIED TIMESLOT":
+                        continue
+                    slot = (week, day, time, pitch)
+                    if isinstance(content, tuple):
+                        match_slots.append(slot)
+                    elif content == "":
+                        empty_slots.append(slot)
+
+    # Ensure we have at least one match to move
+    if not match_slots:
+        return mutated_draw
+
+    # Select one match slot to relocate
+    slot1 = random.choice(match_slots)
+    week1, day1, _, _ = slot1
+
+    # Build swappable pool excluding same week and same day
+    swappable_slots = [
+        s for s in (match_slots + empty_slots)
+        if s != slot1 and s[0] != week1 and s[1] != day1
+    ]
+
+    if not swappable_slots:
+        return mutated_draw  # No valid second slot
+
+    # Pick a second slot to swap with
+    slot2 = random.choice(swappable_slots)
+
+    # Swap the contents
+    w1, d1, t1, p1 = slot1
+    w2, d2, t2, p2 = slot2
+
+    # Swap the contents
+    temp = mutated_draw[w1][d1][t1][p1]
+    mutated_draw[w1][d1][t1][p1] = mutated_draw[w2][d2][t2][p2]
+    mutated_draw[w2][d2][t2][p2] = temp
+
+    return mutated_draw
+
 if __name__ == "__main__":
-    #draw, leagues, possible_max_metric = initial_sort(random_directory)
-    draw, leagues, possible_max_metric = initial_sort(prefect_directory)
+    draw, leagues, possible_max_metric = initial_sort(random_directory)
+    #draw, leagues, possible_max_metric = initial_sort(prefect_directory)
 
     # Start with 10 mutated versions of the original draw
     draws = [random_match_changes(copy.deepcopy(draw)) for _ in range(POPULATION_SIZE)]
@@ -84,7 +135,7 @@ if __name__ == "__main__":
     generations_completed = 0
 
     patience = 20  # How many generations to wait for improvement
-    min_delta = 0.001  # Minimum improvement required
+    min_delta = 0  # Minimum improvement required
     stagnation_counter = 0
 
     for generation in range(GENERATIONS):
@@ -105,7 +156,7 @@ if __name__ == "__main__":
         # Record best metric of this generation
         current_best_metric = best[0][0]
 
-        # ⏸ EARLY STOPPING LOGIC
+        # Early stopping logic
         if len(best_metrics) > patience:
             if current_best_metric - max(best_metrics[-patience:]) < min_delta:
                 stagnation_counter += 1
@@ -129,11 +180,14 @@ if __name__ == "__main__":
         new_draws = []
         for i in range(SURVIVORS):
             new_draws.append(copy.deepcopy(best[i][1]))  # survivor
-            new_draws.append(random_match_changes(copy.deepcopy(best[i][1])))  # mutated version
+            #new_draws.append(random_match_changes(copy.deepcopy(best[i][1])))  # mutated version
+            new_draws.append(match_change_no_same_week_no_same_day(copy.deepcopy(best[i][1])))
+            new_draws.append(match_change_no_same_week_no_same_day(copy.deepcopy(best[i][1])))
 
         while len(new_draws) < POPULATION_SIZE:
             seed = copy.deepcopy(random.choice(best)[1])
-            new_draws.append(random_match_changes(seed))
+            #new_draws.append(random_match_changes(seed))
+            new_draws.append(match_change_no_same_week_no_same_day(seed))
 
         draws = new_draws
         generations_completed += 1
