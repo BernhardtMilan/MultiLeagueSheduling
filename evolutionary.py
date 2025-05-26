@@ -126,8 +126,10 @@ def match_change_no_same_week_no_same_day(draw_structure):
     return mutated_draw
 
 if __name__ == "__main__":
-    draw, leagues, possible_max_metric = initial_sort(random_directory)
-    #draw, leagues, possible_max_metric = initial_sort(prefect_directory)
+    draw, leagues, possible_max_metric = initial_sort(random_directory, plot=False)
+    #draw, leagues, possible_max_metric = initial_sort(prefect_directory, plot=False)
+
+    print("Initial sort done, starting evolutionary algorithm...")
 
     # Start with 10 mutated versions of the original draw
     draws = [random_match_changes(copy.deepcopy(draw)) for _ in range(POPULATION_SIZE)]

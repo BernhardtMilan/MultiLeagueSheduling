@@ -11,6 +11,7 @@ from openpyxl.styles import Alignment, Font
 
 from schedule_validator import ScheduleValidator, parse_occupied_rule #need to fix circle import add refactor somewhere else
 from init import *
+from league_devider import devide_leagues
 
 # Define the directory where the Excel files are located
 #directory = './tablak/'
@@ -110,7 +111,7 @@ def process_excel_file(excel_file):
         print(f"Error: Failed to process file {excel_file}: {e}")
         return None, None, None
 
-def get_input_data_and_sort_to_leagues(directory):
+def get_input_data_and_sort_to_leagues(directory, plot):
     leagues = [{}, {}, {}, {}, {}]
     # Get the full paths of all Excel files in the directory
     excel_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.xlsx')]
@@ -126,47 +127,15 @@ def get_input_data_and_sort_to_leagues(directory):
                 print(f"Error: Unknown league {league} for team {team_name}")
 
     # Now you have five dictionaries for each league
-    if directory != prefect_directory:
-        for i in range(5):
-            print(f"Teams in League {i+1}: {len(leagues[i].keys())}")
-            print(leagues[i].keys())
-            print("")
+    if plot:
+        if directory != prefect_directory:
+            for i in range(5):
+                print(f"Teams in League {i+1}: {len(leagues[i].keys())}")
+                print(leagues[i].keys())
+                print("")
 
     return leagues
 
-def devide_leagues(leagues):
-    devided = []
-    division_counts = []
-
-    for league in leagues:
-        if len(league) > 12:
-            n = len(league)
-            # Calculate the minimum number of groups needed to keep sizes around 12
-            num_groups = (n + 11) // 12  # This ensures each group has at most 12 teams
-
-            # Determine base group size and how many groups will have an extra team
-            base_group_size = n // num_groups
-            remainder = n % num_groups
-
-            # Create the group sizes list, with `remainder` groups of size `base_group_size + 1`
-            group_sizes = [base_group_size + 1] * remainder + [base_group_size] * (num_groups - remainder)
-        
-            # Convert league to list of items and shuffle to randomize order
-            league_items = list(league.items())
-            random.shuffle(league_items)  # Shuffle the list of teams
-
-            # Split the randomized list into groups
-            start = 0
-            for size in group_sizes:
-                # Create a new dictionary for each divided group
-                group_dict = dict(league_items[start:start + size])
-                devided.append(group_dict)
-                start += size
-            division_counts.append(num_groups)
-        else:
-            devided.append(league)
-            division_counts.append(1)
-    return devided, division_counts
 
 def visualize_devided_leagues(devided_leagues, division_counts):
     print("--------------------------DIVIDED LEAGUES-----------------------------------")
@@ -329,24 +298,6 @@ def calculate_metric(draw_structure, leagues):
 
     return total_metric, scores, number_of_matches, value_counts
 
-def calculate_metric_for_perfect_sort():
-    perfect_sort = np.load('random_sort.npy', allow_pickle='TRUE').item()
-
-    perfect_leagues = get_input_data_and_sort_to_leagues(prefect_directory)
-
-    metric, _, _, value_counts = calculate_metric(perfect_sort, perfect_leagues)
-
-    print("With a perfect sort:")
-
-    print("")
-    print("METRIC:")
-    print(metric)
-
-    print("")
-    print("Match avaliability:")
-    print("[bad, no answer, might, good]")
-    print(value_counts)
-
 def calculate_possible_max_metric(leagues_all_games):
 
     total_teams = 0
@@ -438,78 +389,76 @@ def generate_output(draw_structure, filename):
     wb.save(filename)
     return
 
-def initial_sort(directory=random_directory):
+def initial_sort(directory, plot=True):
+
+    print(f"importing data from {directory}...")
     
     draw_structure = initialize_empty_draw_structure()
 
     draw_structure = add_occupied_times(draw_structure)
 
-    print(directory)
+    leagues = get_input_data_and_sort_to_leagues(directory, plot)
 
-    leagues = get_input_data_and_sort_to_leagues(directory)
-
-    devided_leagues, division_counts = devide_leagues(leagues)
-    visualize_devided_leagues(devided_leagues, division_counts)
+    devided_leagues, division_counts = devide_leagues(leagues, devision_strategy, plot)
+    if plot: visualize_devided_leagues(devided_leagues, division_counts)
 
     leagues_all_games = create_all_pairs(devided_leagues)
-    visualize_league_games(leagues_all_games, division_counts)
+    if plot: visualize_league_games(leagues_all_games, division_counts)
 
     draw_structure = sort_random_matches(draw_structure, leagues_all_games)
 
-    print("")
-    print("Samples from draw structure:")
-    print("Week 2, Tuesday:")
-    print(draw_structure["Week 2"]["Tuesday"])
-    print("")
-    print("Week 4, Friday:")
-    print(draw_structure["Week 4"]["Friday"])
-    print("")
-    print("Week 10, Monday, 18:00-19:00:")
-    print(draw_structure["Week 10"]["Monday"]["18:00-19:00"])
-    print("")
-    print("Week 14, Monday, 20:00-21:00:")
-    print(draw_structure["Week 14"]["Monday"]["20:00-21:00"])
-
     metric, scores, number_of_matches, value_counts = calculate_metric(draw_structure, leagues)
 
-    print("")
-    print("METRIC:")
-    print(metric)
-    print("")
-    print("Scores:")
-    print("[total_availability_score, bunching_penalty, idle_gap_penalty, spread_reward]")
-    print(scores)
-    print("Weighted scores:")
-    print(f'[{weights["availability"] * scores[0]}, {weights["match_bunching_penalty"] * scores[1]}, {weights["idle_gap_penalty"] * scores[2]}, {weights["spread_reward"] * scores[3]}]')
-    print("")
-    print("The number of matches:")
-    print(number_of_matches)
-    print("All possible matches (16weeks, 5days, 6timeslots, 4pithes) - occupied times:")
-    print(16*5*6*4 - 1)
+    if plot:
+        print("")
+        print("Samples from draw structure:")
+        print("Week 2, Tuesday:")
+        print(draw_structure["Week 2"]["Tuesday"])
+        print("")
+        print("Week 4, Friday:")
+        print(draw_structure["Week 4"]["Friday"])
+        print("")
+        print("Week 10, Monday, 18:00-19:00:")
+        print(draw_structure["Week 10"]["Monday"]["18:00-19:00"])
+        print("")
+        print("Week 14, Monday, 20:00-21:00:")
+        print(draw_structure["Week 14"]["Monday"]["20:00-21:00"])
 
-    print("")
-    print("Match avaliability:")
-    print("[bad, no answer, might, good]")
-    print(value_counts)
+        print("")
+        print("METRIC:")
+        print(metric)
+        print("")
+        print("Scores:")
+        print("[total_availability_score, bunching_penalty, idle_gap_penalty, spread_reward]")
+        print(scores)
+        print("Weighted scores:")
+        print(f'[{weights["availability"] * scores[0]}, {weights["match_bunching_penalty"] * scores[1]}, {weights["idle_gap_penalty"] * scores[2]}, {weights["spread_reward"] * scores[3]}]')
+        print("")
+        print("The number of matches:")
+        print(number_of_matches)
+        print("All possible matches (16weeks, 5days, 6timeslots, 4pithes) - occupied times:")
+        print(16*5*6*4 - 1)
 
-    print(" ")
-    print("Validating schedule...")
+        print("")
+        print("Match avaliability:")
+        print("[bad, no answer, might, good]")
+        print(value_counts)
+
+        print(" ")
+        print("Validating schedule...")
     ScheduleValidator(draw_structure, devided_leagues, division_counts)
 
     sould_save_random_sort = False
     file_save_random_sort = False
-    we_are_calculating_metric_for_perfect_sort = False
 
     if sould_save_random_sort:
         np.save('random_sort.npy', draw_structure)
     if file_save_random_sort:
         generate_output(draw_structure, filename="best_draw_output_from_evolutionary.xlsx")
-    if we_are_calculating_metric_for_perfect_sort:
-        calculate_metric_for_perfect_sort()
 
     possible_max_metric = calculate_possible_max_metric(leagues_all_games)
     
     return(draw_structure, leagues, possible_max_metric)
 
 if __name__ == "__main__":
-    initial_sort()
+    initial_sort(directory, plot=True)

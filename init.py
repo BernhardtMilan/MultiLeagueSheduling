@@ -1,8 +1,12 @@
 random_directory = './generalt_tablak/'
 prefect_directory = './perfect_tables/'
 
+directory = random_directory
+
 # Allowed values in the colored schedule table
 allowed_values = {-2, 0, 1, 2}
+
+devision_strategy="knn" # random, knn or pairwise
 
 weeks = [f"Week {i}" for i in range(1, 17)]
 time_slots = ['17:00-18:00', '18:00-19:00', '19:00-20:00', '20:00-21:00', '21:00-22:00', '22:00-23:00']
