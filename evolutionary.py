@@ -2,6 +2,7 @@ import random
 import copy
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 from sorsolo import initial_sort, calculate_metric, generate_output
 from init import *
@@ -83,12 +84,12 @@ def match_change_no_same_week_no_same_day(draw_structure):
 
     for week in weeks:
         for day in days_of_week:
-            for time in time_slots:
+            for time_slot in time_slots:
                 for pitch in pitches:
-                    content = mutated_draw[week][day][time][pitch]
+                    content = mutated_draw[week][day][time_slot][pitch]
                     if content == "OCCUPIED TIMESLOT":
                         continue
-                    slot = (week, day, time, pitch)
+                    slot = (week, day, time_slot, pitch)
                     if isinstance(content, tuple):
                         match_slots.append(slot)
                     elif content == "":
@@ -125,6 +126,57 @@ def match_change_no_same_week_no_same_day(draw_structure):
 
     return mutated_draw
 
+def random_until_good_match_mutation(draw_structure):
+
+    max_attempts=20
+
+    mutated_draw = draw_structure
+
+    # Find a valid match slot
+    match_slot = None
+    for _ in range(max_attempts):
+        w = random.choice(weeks)
+        d = random.choice(days_of_week)
+        t = random.choice(time_slots)
+        p = random.choice(pitches)
+
+        content = mutated_draw[w][d][t][p]
+        if isinstance(content, tuple):  # Found a match
+            match_slot = (w, d, t, p)
+            break
+
+    if not match_slot:
+        return mutated_draw  # No valid match found
+
+    # Find a valid empty slot
+    match_week, match_day, _, _ = match_slot
+    swap_slot = None
+    for _ in range(max_attempts):
+        w = random.choice(weeks)
+        d = random.choice(days_of_week)
+        t = random.choice(time_slots)
+        p = random.choice(pitches)
+
+        if w == match_week or d == match_day:
+            continue
+
+        content = mutated_draw[w][d][t][p]
+        if content != "OCCUPIED TIMESLOT":
+            swap_slot = (w, d, t, p)
+            break
+
+    if not swap_slot:
+        return mutated_draw  # No suitable target slot found
+
+    w1, d1, t1, p1 = match_slot
+    w2, d2, t2, p2 = swap_slot
+
+    temp = mutated_draw[w1][d1][t1][p1]
+    mutated_draw[w1][d1][t1][p1] = mutated_draw[w2][d2][t2][p2]
+    mutated_draw[w2][d2][t2][p2] = temp
+
+    return mutated_draw
+
 if __name__ == "__main__":
     draw, leagues, possible_max_metric = initial_sort(random_directory, plot=False)
     #draw, leagues, possible_max_metric = initial_sort(prefect_directory, plot=False)
@@ -139,6 +191,11 @@ if __name__ == "__main__":
     patience = 20  # How many generations to wait for improvement
     min_delta = 0  # Minimum improvement required
     stagnation_counter = 0
+
+    mutations_per_survivor = (POPULATION_SIZE - SURVIVORS) // SURVIVORS
+    extra_mutations = (POPULATION_SIZE - SURVIVORS) % SURVIVORS
+
+    start_time_10gen = time.time()
 
     for generation in range(GENERATIONS):
         # Evaluate all current draws
@@ -176,19 +233,20 @@ if __name__ == "__main__":
                 fancy_log(generation, current_best_metric, best_metrics[-11], possible_max_metric)
             else: # IF there is no previous generation to compare to
                 fancy_log(generation, current_best_metric, current_best_metric, possible_max_metric)
+            elapsed = time.time() - start_time_10gen
+            print(f"Time taken for last 10 generations: {elapsed:.2f} seconds")
+            start_time_10gen = time.time()  # Reset timer for next 10
 
         # Create next gen
         new_draws = []
         for i in range(SURVIVORS):
             new_draws.append(copy.deepcopy(best[i][1]))  # survivor
-            #new_draws.append(random_match_changes(copy.deepcopy(best[i][1])))  # mutated version
-            new_draws.append(match_change_no_same_week_no_same_day(copy.deepcopy(best[i][1])))
-            new_draws.append(match_change_no_same_week_no_same_day(copy.deepcopy(best[i][1])))
 
-        while len(new_draws) < POPULATION_SIZE:
-            seed = copy.deepcopy(random.choice(best)[1])
-            #new_draws.append(random_match_changes(seed))
-            new_draws.append(match_change_no_same_week_no_same_day(seed))
+            num_mutations = mutations_per_survivor + (1 if i < extra_mutations else 0)
+            for _ in range(num_mutations):
+                #new_draws.append(random_match_changes(copy.deepcopy(best[i][1])))
+                #new_draws.append(match_change_no_same_week_no_same_day(copy.deepcopy(best[i][1])))
+                new_draws.append(random_until_good_match_mutation(copy.deepcopy(best[i][1])))
 
         draws = new_draws
         generations_completed += 1
