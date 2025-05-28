@@ -162,12 +162,11 @@ if __name__ == "__main__":
         if len(best_metrics) > patience:
             if current_best_metric - max(best_metrics[-patience:]) < min_delta:
                 stagnation_counter += 1
+                if stagnation_counter >= patience:
+                    print(f"\nEarly stopping at generation {generation + 1} due to no significant improvement.")
+                    break
             else:
                 stagnation_counter = 0  # Reset if improvement found
-
-            if stagnation_counter >= patience:
-                print(f"\nEarly stopping at generation {generation + 1} due to no significant improvement.")
-                break
         
         best_metrics.append(current_best_metric)
 
