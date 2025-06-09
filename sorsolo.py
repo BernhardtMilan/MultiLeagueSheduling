@@ -2,8 +2,9 @@ import os
 import pandas as pd
 import numpy as np
 import random
+import time
 from itertools import combinations
-from collections import defaultdict
+from collections import defaultdict, Counter
 from weights import weights
 
 from openpyxl import Workbook
@@ -15,6 +16,9 @@ from league_devider import devide_leagues
 
 # Define the directory where the Excel files are located
 #directory = './tablak/'
+
+DAY_INDEX = {day: i for i, day in enumerate(days_of_week)}
+SLOT_INDEX = {slot: i for i, slot in enumerate(time_slots)}
 
 def initialize_empty_draw_structure():
     """
@@ -113,6 +117,8 @@ def process_excel_file(excel_file):
 
 def get_input_data_and_sort_to_leagues(directory, plot):
     leagues = [{}, {}, {}, {}, {}]
+    team_schedules = {}
+
     # Get the full paths of all Excel files in the directory
     excel_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.xlsx')]
     # Iterate through each Excel file, process it, and assign the team to the appropriate league
@@ -121,20 +127,29 @@ def get_input_data_and_sort_to_leagues(directory, plot):
 
         # Only assign the team if no errors occurred and the schedule was properly processed
         if league and team_name and schedule:
-            if 1<= league <= 5:
+            if 1 <= league <= 5:
                 leagues[league-1][team_name] = schedule
+
+                # Convert to NumPy array (5 days × 6 slots)
+                team_array = np.empty((5, 6), dtype=np.int64)
+
+                for day, times in schedule.items():
+                    day_idx = DAY_INDEX[day]
+                    for slot, value in times.items():
+                        slot_idx = SLOT_INDEX[slot]
+                        team_array[day_idx, slot_idx] = value
+
+                team_schedules[team_name] = team_array
             else:
                 print(f"Error: Unknown league {league} for team {team_name}")
 
-    # Now you have five dictionaries for each league
-    if plot:
-        if directory != prefect_directory:
-            for i in range(5):
-                print(f"Teams in League {i+1}: {len(leagues[i].keys())}")
-                print(leagues[i].keys())
-                print("")
+    if plot and directory != prefect_directory:
+        for i in range(5):
+            print(f"Teams in League {i+1}: {len(leagues[i])}")
+            print(leagues[i].keys())
+            print("")
 
-    return leagues
+    return leagues, team_schedules
 
 
 def visualize_devided_leagues(devided_leagues, division_counts):
@@ -208,23 +223,77 @@ def sort_random_matches(draw_structure, leagues_all_games):
                         
     return draw_structure
 
-def get_team_schedule(team_name, leagues):
-    """
-    Helper function to find the schedule for a given team from the leagues data structure.
-    """
-    for league in leagues:
-        if team_name in league:
-            return league[team_name]
-    return None  # Return None if team is not found
+def flatten_matches(draw_structure):
+    matches = []
+    for week_idx, week in enumerate(draw_structure.values(), start=1):
+        for day_key, day in week.items():
+            for timeslot_key, timeslot in day.items():
+                for match in timeslot.values():
+                    if match and match != "OCCUPIED TIMESLOT":
+                        matches.append((week_idx, day_key, timeslot_key, match))
+    return matches
 
-def calculate_metric(draw_structure, leagues):
+def calculate_metric(draw_structure, team_schedules):
+
+    #start_time = time.time()
+
+    total_availability_score = 0
+
+    team_week_counts = defaultdict(lambda: [0] * 16)
+
+    matches = flatten_matches(draw_structure)
+
+    for week_idx, day_key, timeslot_key, (team1, team2) in matches:
+        team1_schedule = team_schedules[team1]
+        team2_schedule = team_schedules[team2]
+
+        day_idx = DAY_INDEX[day_key]
+        slot_idx = SLOT_INDEX[timeslot_key]
+
+        team1_availability = team1_schedule[day_idx, slot_idx]
+        team2_availability = team2_schedule[day_idx, slot_idx]
+
+        total_availability_score += team1_availability + team2_availability
+
+        team_week_counts[team1][week_idx - 1] += 1
+        team_week_counts[team2][week_idx - 1] += 1
+
+
+    bunching_penalty = 0
+    idle_gap_penalty = 0
+    spread_reward = 0
+
+    for counts in team_week_counts.values():
+        weeks_played = [i for i, count in enumerate(counts) if count > 0]
+
+        bunching_penalty += sum(count - 1 for count in counts if count > 1)
+
+        if len(weeks_played) > 1:
+            gaps = [weeks_played[i+1] - weeks_played[i] - 1 for i in range(len(weeks_played)-1)]
+            idle_gap_penalty += sum(1 for gap in gaps if gap >= 2)
+
+        spread_reward += len(weeks_played)
+
+    total_metric = (
+        weights["availability"] * total_availability_score
+        + weights["match_bunching_penalty"] * bunching_penalty
+        + weights["idle_gap_penalty"] * idle_gap_penalty
+        + weights["spread_reward"] * spread_reward
+    )
+
+    #elapsed = time.time() - start_time
+    #print(f"Time taken for calculating metric: {elapsed:.5f} seconds")
+
+    return total_metric, team_week_counts
+
+def calculate_final_metric(draw_structure, team_schedules):
 
     total_availability_score = 0
     number_of_matches = 0
     value_counts = [0, 0, 0, 0]
     value_map = {-2: 0, 0: 1, 1: 2, 2: 3}
 
-    team_weeks = defaultdict(set)
+    team_weeks = defaultdict(list)
 
     for week_idx, (week_name, week) in enumerate(draw_structure.items(), start=1):
         for day_key, day in week.items():
@@ -232,17 +301,20 @@ def calculate_metric(draw_structure, leagues):
                 for match in timeslot.values():
                     if match and match != "OCCUPIED TIMESLOT":
                         team1, team2 = match
-                        team1_schedule = get_team_schedule(team1, leagues)
-                        team2_schedule = get_team_schedule(team2, leagues)
+                        team1_schedule = team_schedules[team1]
+                        team2_schedule = team_schedules[team2]
 
                         # If a team schedule is not found, skip this match
                         if team1_schedule is None or team2_schedule is None:
                             print(f"Warning: Schedule not found for {team1} or {team2}")
                             continue
 
+                        day_idx = DAY_INDEX[day_key]
+                        slot_idx = SLOT_INDEX[timeslot_key]
+
                         try:
-                            team1_availability = team1_schedule[day_key][timeslot_key]
-                            team2_availability = team2_schedule[day_key][timeslot_key]
+                            team1_availability = int(team_schedules[team1][day_idx, slot_idx])
+                            team2_availability = int(team_schedules[team2][day_idx, slot_idx])
                         except KeyError:
                             # If availability data is missing for a team or timeslot, skip this match
                             print(f"Warning: Missing data for {team1} or {team2} at {day_key} {timeslot_key}")
@@ -256,14 +328,12 @@ def calculate_metric(draw_structure, leagues):
                             if value in value_map:
                                 value_counts[value_map[value]] += 1
 
-                        team_weeks[team1].add(week_idx)
-                        team_weeks[team2].add(week_idx)
+                        team_weeks[team1].append(week_idx)
+                        team_weeks[team2].append(week_idx)
 
     bunching_penalty = 0
     idle_gap_penalty = 0
     spread_reward = 0
-
-    total_weeks = len(draw_structure)
 
     for team, weeks_played in team_weeks.items():
         weeks_list = sorted(weeks_played)
@@ -285,7 +355,7 @@ def calculate_metric(draw_structure, leagues):
         idle_gap_penalty += sum(1 for gap in gaps if gap >= 2)
 
         # Reward: playing in many different weeks
-        spread_reward += len(weeks_list)
+        spread_reward += len(set(weeks_list))
 
     total_metric = (
         weights["availability"] * total_availability_score
@@ -397,7 +467,7 @@ def initial_sort(directory, plot=True):
 
     draw_structure = add_occupied_times(draw_structure)
 
-    leagues = get_input_data_and_sort_to_leagues(directory, plot)
+    leagues, team_schedules = get_input_data_and_sort_to_leagues(directory, plot)
 
     devided_leagues, division_counts = devide_leagues(leagues, devision_strategy, plot)
     if plot: visualize_devided_leagues(devided_leagues, division_counts)
@@ -407,7 +477,7 @@ def initial_sort(directory, plot=True):
 
     draw_structure = sort_random_matches(draw_structure, leagues_all_games)
 
-    metric, scores, number_of_matches, value_counts = calculate_metric(draw_structure, leagues)
+    metric, scores, number_of_matches, value_counts = calculate_final_metric(draw_structure, team_schedules)
 
     if plot:
         print("")
@@ -458,7 +528,7 @@ def initial_sort(directory, plot=True):
 
     possible_max_metric = calculate_possible_max_metric(leagues_all_games)
     
-    return(draw_structure, leagues, possible_max_metric)
+    return (draw_structure, team_schedules, possible_max_metric)
 
 if __name__ == "__main__":
     initial_sort(directory, plot=True)

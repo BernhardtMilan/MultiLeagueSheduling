@@ -1,3 +1,12 @@
+import enlighten
+
+POPULATION_SIZE = 32
+SURVIVORS = 6
+GENERATIONS = 5000
+
+manager = enlighten.get_manager()
+progress = manager.counter(total=GENERATIONS, desc='Evolving', unit='gen', unit_scale=True, color='bright_black')
+
 random_directory = './generalt_tablak/'
 prefect_directory = './perfect_tables/'
 
