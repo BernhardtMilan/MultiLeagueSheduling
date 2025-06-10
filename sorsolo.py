@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import random
 import time
+import pickle
 from itertools import combinations
 from collections import defaultdict, Counter
 from weights import weights
@@ -149,8 +150,30 @@ def get_input_data_and_sort_to_leagues(directory, plot):
             print(leagues[i].keys())
             print("")
 
+    # Save variables to file, so we dont have to import every time
+    with open(os.path.join(directory, "processed_data.pkl"), "wb") as f:
+        pickle.dump((leagues, team_schedules), f)
+
     return leagues, team_schedules
 
+def get_input_data_from_saves(directory, plot=False):
+    import pickle
+
+    filepath = os.path.join(directory, "processed_data.pkl")
+    try:
+        with open(filepath, "rb") as f:
+            leagues, team_schedules = pickle.load(f)
+
+        if plot:
+            for i in range(5):
+                print(f"Teams in League {i+1}: {len(leagues[i])}")
+                print(leagues[i].keys())
+                print("")
+
+        return leagues, team_schedules
+    except FileNotFoundError:
+        print(f"No saved data found in {filepath}. Run get_input_data_and_sort_to_leagues first.")
+        return None, None
 
 def visualize_devided_leagues(devided_leagues, division_counts):
     print("--------------------------DIVIDED LEAGUES-----------------------------------")
@@ -467,7 +490,10 @@ def initial_sort(directory, plot=True):
 
     draw_structure = add_occupied_times(draw_structure)
 
-    leagues, team_schedules = get_input_data_and_sort_to_leagues(directory, plot)
+    #import fresh from excel files
+    #leagues, team_schedules = get_input_data_and_sort_to_leagues(directory, plot)
+    # pre saved data, for faster initiakuzation
+    leagues, team_schedules = get_input_data_from_saves(directory, plot)
 
     devided_leagues, division_counts = devide_leagues(leagues, devision_strategy, plot)
     if plot: visualize_devided_leagues(devided_leagues, division_counts)

@@ -234,8 +234,6 @@ def caluclate_metric_change(old_metric, week_list, changes, team_schedules):
     change_in_spread_reward = 0
     change_in_idle_gap_penalty = 0
 
-    # Calculate the change in availability
-
     #update the week list with the changes
     new_week_list = calculate_new_week_list(week_list, changes)
 
@@ -279,8 +277,7 @@ def caluclate_metric_change(old_metric, week_list, changes, team_schedules):
     return new_metric, new_week_list
 
 if __name__ == "__main__":
-    draw, team_schedules, possible_max_metric = initial_sort(random_directory, plot=False)
-    #draw, team_schedules, possible_max_metric = initial_sort(prefect_directory, plot=False)
+    draw, team_schedules, possible_max_metric = initial_sort(directory, plot=False)
 
     print("Initial sort done, starting evolutionary algorithm...")
 
