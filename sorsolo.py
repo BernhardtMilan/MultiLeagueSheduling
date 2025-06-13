@@ -144,11 +144,10 @@ def get_input_data_and_sort_to_leagues(directory, plot):
             else:
                 print(f"Error: Unknown league {league} for team {team_name}")
 
-    if plot and directory != prefect_directory:
-        for i in range(5):
-            print(f"Teams in League {i+1}: {len(leagues[i])}")
-            print(leagues[i].keys())
-            print("")
+    for i in range(5):
+        print(f"Teams in League {i+1}: {len(leagues[i])}")
+        print(leagues[i].keys())
+        print("")
 
     # Save variables to file, so we dont have to import every time
     with open(os.path.join(directory, "processed_data.pkl"), "wb") as f:

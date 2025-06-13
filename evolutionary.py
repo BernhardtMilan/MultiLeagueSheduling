@@ -2,7 +2,7 @@ import random
 import copy
 import matplotlib.pyplot as plt
 import numpy as np
-import time
+from time import perf_counter, time
 
 from sorsolo import initial_sort, calculate_metric, calculate_final_metric, generate_output, DAY_INDEX, SLOT_INDEX
 from init import *
@@ -68,7 +68,7 @@ def random_match_changes(draw_structure):
     mutated_draw[w1][d1][t1][p1] = mutated_draw[w2][d2][t2][p2]
     mutated_draw[w2][d2][t2][p2] = temp
 
-    return mutated_draw
+    return mutated_draw, (slot1, slot2, mutated_draw[w1][d1][t1][p1], mutated_draw[w2][d2][t2][p2])
 
 def match_change_no_same_week_no_same_day(draw_structure):
     mutated_draw = draw_structure
@@ -119,7 +119,7 @@ def match_change_no_same_week_no_same_day(draw_structure):
     mutated_draw[w1][d1][t1][p1] = mutated_draw[w2][d2][t2][p2]
     mutated_draw[w2][d2][t2][p2] = temp
 
-    return mutated_draw
+    return mutated_draw, (slot1, slot2, mutated_draw[w1][d1][t1][p1], mutated_draw[w2][d2][t2][p2])
 
 def random_until_good_match_mutation(draw_structure):
 
@@ -276,6 +276,18 @@ def caluclate_metric_change(old_metric, week_list, changes, team_schedules):
 
     return new_metric, new_week_list
 
+def copy_draw_structure(draw):
+    return {
+        week: {
+            day: {
+                time: pitches.copy()  # {1: team1, 2: team2, ...}
+                for time, pitches in day_data.items()
+            }
+            for day, day_data in week_data.items()
+        }
+        for week, week_data in draw.items()
+    }
+
 if __name__ == "__main__":
     draw, team_schedules, possible_max_metric = initial_sort(directory, plot=False)
 
@@ -297,7 +309,7 @@ if __name__ == "__main__":
     mutations_per_survivor = (POPULATION_SIZE - SURVIVORS) // SURVIVORS
     extra_mutations = (POPULATION_SIZE - SURVIVORS) % SURVIVORS
 
-    start_time_10gen = time.time()
+    start_time_10gen = time()
 
     for generation in range(1, GENERATIONS + 1):
         # Evaluate all current draws
@@ -328,8 +340,8 @@ if __name__ == "__main__":
 
         # Print best metrics of the generation
         if generation % 10 == 0:
-            elapsed = time.time() - start_time_10gen
-            start_time_10gen = time.time()  # Reset timer for next 10
+            elapsed = time() - start_time_10gen
+            start_time_10gen = time()  # Reset timer for next 10
             if len(best_metrics) > 10:
                 fancy_log(generation, current_best_metric, best_metrics[-11], possible_max_metric, elapsed)
             else: # IF there is no previous generation to compare to
@@ -340,15 +352,15 @@ if __name__ == "__main__":
         new_metrics = []
         new_team_week_counts_list = []
         for i in range(SURVIVORS):
-            new_draws.append(copy.deepcopy(best[i][1]))  # survivor
+            new_draws.append(copy_draw_structure(best[i][1]))  # survivor
             new_metrics.append(best[i][0])
             new_team_week_counts_list.append(best[i][2])
 
             num_mutations = mutations_per_survivor + (1 if i < extra_mutations else 0)
             for _ in range(num_mutations):
-                #new_draw, changes = random_match_changes(copy.deepcopy(best[i][1]))
-                #new_draw, changes = match_change_no_same_week_no_same_day(copy.deepcopy(best[i][1]))
-                new_draw, changes = random_until_good_match_mutation(copy.deepcopy(best[i][1]))
+                #new_draw, changes = random_match_changes(copy_draw_structure(best[i][1]))
+                #new_draw, changes = match_change_no_same_week_no_same_day(copy_draw_structure(best[i][1]))
+                new_draw, changes = random_until_good_match_mutation(copy_draw_structure(best[i][1]))
 
                 new_metric, new_team_week_counts = caluclate_metric_change(old_metric=best[i][0], week_list=best[i][2], changes=changes, team_schedules=team_schedules)
 

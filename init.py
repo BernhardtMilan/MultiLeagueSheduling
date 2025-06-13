@@ -1,16 +1,16 @@
 import enlighten
 
-POPULATION_SIZE = 32
-SURVIVORS = 6
-GENERATIONS = 5000
+POPULATION_SIZE = 24
+SURVIVORS = 3
+GENERATIONS = 50000
 
 manager = enlighten.get_manager()
 progress = manager.counter(total=GENERATIONS, desc='Evolving', unit='gen', unit_scale=True, color='bright_black')
 
-random_directory = './generalt_tablak/'
-prefect_directory = './perfect_tables/'
+random_directory = './fully_random_tables/'
+old_directory = './old_tables/'
 
-directory = random_directory
+directory = old_directory
 
 # Allowed values in the colored schedule table
 allowed_values = {-2, 0, 1, 2}

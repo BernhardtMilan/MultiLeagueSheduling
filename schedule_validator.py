@@ -104,5 +104,4 @@ def ScheduleValidator(schedule, devided_leagues, division_counts):
                 print(f"Invalid match count between {team1} and {team2}: {count}")
                 return False
 
-    print("Schedule is valid.")
     return True

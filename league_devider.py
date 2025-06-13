@@ -4,12 +4,10 @@ from init import *
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.lines import Line2D
-from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.metrics import pairwise_distances_argmin_min
 from scipy.spatial.distance import pdist, squareform
 from sklearn.manifold import TSNE
-import umap.umap_ as umap
 from collections import defaultdict
 
 def flatten_availability_matrix(matrix):
@@ -155,6 +153,9 @@ def assign_random_teams_to_groups(league_items, group_sizes):
     return divided
 
 def plot_all_leagues_clusters(divided_leagues, division_counts, method="tsne"):
+    import umap.umap_ as umap
+    from sklearn.decomposition import PCA
+    
     reducer_cls = {
         "tsne": lambda X: TSNE(n_components=2, random_state=42, perplexity=10).fit_transform(X),
         "umap": lambda X: umap.UMAP(n_components=2, random_state=42, n_neighbors=min(10, len(X)-1)).fit_transform(X),
