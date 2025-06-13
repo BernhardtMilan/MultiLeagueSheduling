@@ -544,12 +544,9 @@ def initial_sort(directory, plot=True):
     ScheduleValidator(draw_structure, devided_leagues, division_counts)
 
     sould_save_random_sort = False
-    file_save_random_sort = False
 
     if sould_save_random_sort:
         np.save('random_sort.npy', draw_structure)
-    if file_save_random_sort:
-        generate_output(draw_structure, filename="best_draw_output_from_evolutionary.xlsx")
 
     possible_max_metric = calculate_possible_max_metric(leagues_all_games)
     
