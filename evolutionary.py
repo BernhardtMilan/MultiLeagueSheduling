@@ -302,7 +302,7 @@ if __name__ == "__main__":
 
     generations_completed = 0
 
-    patience = 20  # How many generations to wait for improvement
+    patience = 2000  # How many generations to wait for improvement
     min_delta = 0  # Minimum improvement required
     stagnation_counter = 0
 
@@ -326,15 +326,18 @@ if __name__ == "__main__":
         # Record best metric of this generation
         current_best_metric = best[0][0]
 
-        # Early stopping logic   TODO: UNCOMMENT LATER
-        #if len(best_metrics) > patience:
-        #    if current_best_metric - max(best_metrics[-patience:]) < min_delta:
-        #       stagnation_counter += 1
-        #        if stagnation_counter >= patience:
-        #            print(f"\nEarly stopping at generation {generation + 1} due to no significant improvement.")
-        #            break
-        #    else:
-        #        stagnation_counter = 0  # Reset if improvement found
+        #Early stopping logic
+        if len(best_metrics) > patience:
+            if current_best_metric - max(best_metrics[-patience:]) < min_delta:
+                stagnation_counter += 1
+                if stagnation_counter >= patience:
+                    print(f"\nEarly stopping at generation {generation + 1} due to no significant improvement.")
+                    break
+            else:
+                stagnation_counter = 0  # Reset if improvement found
+        if current_best_metric == possible_max_metric:
+            print(f"\nReached possible maximum metric at generation {generation + 1}")
+            break
         
         best_metrics.append(current_best_metric)
 
