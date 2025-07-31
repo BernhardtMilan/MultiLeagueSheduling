@@ -289,7 +289,7 @@ def copy_draw_structure(draw):
     }
 
 if __name__ == "__main__":
-    draw, team_schedules, possible_max_metric = initial_sort(directory, plot=False)
+    draw, team_schedules, possible_max_metric, league_teams = initial_sort(directory, plot=False)
 
     print("Initial sort done, starting evolutionary algorithm...")
 
@@ -383,7 +383,7 @@ if __name__ == "__main__":
     best_metric, best_scores, _, best_value_counts = final_metrics[0][0][0], final_metrics[0][0][1], final_metrics[0][0][2], final_metrics[0][0][3]
 
     best_draw = final_metrics[0][1]
-    generate_output(best_draw, filename="best_draw_output_from_evolutionary.xlsx")
+    generate_output(best_draw, league_teams, filename="best_draw_output_from_evolutionary.xlsx")
 
     print("\nFINAL BEST RESULT")
     print("----------------------------")

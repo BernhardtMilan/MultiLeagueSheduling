@@ -419,7 +419,16 @@ def calculate_possible_max_metric(leagues_all_games):
 
     return max_metric
 
-def generate_output(draw_structure, filename):
+def build_league_team_map(devided_leagues, league_names):
+    league_team_map = {}
+
+    for league_dict, league_name in zip(devided_leagues, league_names):
+        teams = list(league_dict.keys())
+        league_team_map[league_name] = teams
+
+    return league_team_map
+
+def generate_output(draw_structure, league_teams, filename):
     day_labels = {
         'Monday': 'Hétfő',
         'Tuesday': 'Kedd',
@@ -477,6 +486,17 @@ def generate_output(draw_structure, filename):
 
         # Move offset to next week (1 row for day header + 1 for pitch header + 6 for time slots)
         row_offset += 8
+    
+    ws2 = wb.create_sheet("Leagues")
+    ws2['A1'] = "League"
+    ws2['B1'] = "Teams"
+    ws2['A1'].font = ws2['B1'].font = Font(bold=True)
+
+    row = 2
+    for league, teams in league_teams.items():
+        ws2.cell(row=row, column=1, value=league)
+        ws2.cell(row=row, column=2, value=", ".join(teams))
+        row += 1
 
     wb.save(filename)
     return
@@ -496,6 +516,8 @@ def initial_sort(directory, plot=True):
 
     devided_leagues, division_counts = devide_leagues(leagues, devision_strategy, plot)
     if plot: visualize_devided_leagues(devided_leagues, division_counts)
+
+    league_teams = build_league_team_map(devided_leagues, league_names)
 
     leagues_all_games = create_all_pairs(devided_leagues)
     if plot: visualize_league_games(leagues_all_games, division_counts)
@@ -550,7 +572,7 @@ def initial_sort(directory, plot=True):
 
     possible_max_metric = calculate_possible_max_metric(leagues_all_games)
     
-    return (draw_structure, team_schedules, possible_max_metric)
+    return (draw_structure, team_schedules, possible_max_metric, league_teams)
 
 if __name__ == "__main__":
     initial_sort(directory, plot=True)
