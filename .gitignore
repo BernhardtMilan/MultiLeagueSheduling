@@ -6,4 +6,3 @@ venv/
 *.png
 __pycache__/
 *.pdf
-*.xlsx
