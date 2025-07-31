@@ -278,91 +278,95 @@ def render_week_tables(draw_structure, highlight_teams=None):
 
             st.dataframe(df, use_container_width=True)
 
-# 1. Set page config once
-st.set_page_config(layout="wide")
-st.title("Lámpafényes sorsolás 2025")
+def main():
+    # 1. Set page config once
+    st.set_page_config(layout="wide")
+    st.title("Lámpafényes sorsolás 2025")
 
-# 4. Load leagues dict only once
-if "leagues_dict" not in st.session_state:
-    st.session_state.leagues_dict = load_leagues()
+    # 4. Load leagues dict only once
+    if "leagues_dict" not in st.session_state:
+        st.session_state.leagues_dict = load_leagues()
 
-leagues_dict = st.session_state.leagues_dict
+    leagues_dict = st.session_state.leagues_dict
 
-# 2. Cache data loading and computation
-@st.cache_data
-def load_all_data():
-    leagues, team_schedules = get_input_data_from_saves(directory, plot=False)
-    df = load_schedule()
-    parsed = parse_schedule(df)
-    draw_structure = build_draw_structure(parsed)
-    team_weeks = extract_team_weeks(draw_structure)
-    violating_teams, scheduling_logs = analyze_team_scheduling(team_weeks, leagues_dict)
-    return draw_structure, team_weeks, violating_teams, team_schedules, scheduling_logs
+    # 2. Cache data loading and computation
+    @st.cache_data
+    def load_all_data():
+        leagues, team_schedules = get_input_data_from_saves(directory, plot=False)
+        df = load_schedule()
+        parsed = parse_schedule(df)
+        draw_structure = build_draw_structure(parsed)
+        team_weeks = extract_team_weeks(draw_structure)
+        violating_teams, scheduling_logs = analyze_team_scheduling(team_weeks, leagues_dict)
+        return draw_structure, team_weeks, violating_teams, team_schedules, scheduling_logs
 
-# 3. Load only once and reuse
-if "draw_structure" not in st.session_state:
-    draw_structure, team_weeks, violating_teams, team_schedules, scheduling_logs = load_all_data()
-    st.session_state.draw_structure = draw_structure
-    st.session_state.team_weeks = team_weeks
-    st.session_state.violating_teams = violating_teams
-    st.session_state.team_schedules = team_schedules
-    st.session_state.scheduling_logs = scheduling_logs
-else:
-    draw_structure = st.session_state.draw_structure
-    team_weeks = st.session_state.team_weeks
-    violating_teams = st.session_state.violating_teams
-    team_schedules = st.session_state.team_schedules
-    scheduling_logs = st.session_state.get("scheduling_logs", [])
+    # 3. Load only once and reuse
+    if "draw_structure" not in st.session_state:
+        draw_structure, team_weeks, violating_teams, team_schedules, scheduling_logs = load_all_data()
+        st.session_state.draw_structure = draw_structure
+        st.session_state.team_weeks = team_weeks
+        st.session_state.violating_teams = violating_teams
+        st.session_state.team_schedules = team_schedules
+        st.session_state.scheduling_logs = scheduling_logs
+    else:
+        draw_structure = st.session_state.draw_structure
+        team_weeks = st.session_state.team_weeks
+        violating_teams = st.session_state.violating_teams
+        team_schedules = st.session_state.team_schedules
+        scheduling_logs = st.session_state.get("scheduling_logs", [])
 
-# Sidebar team selector
-st.sidebar.title("Szúrés csapatra")
-team_league = st.sidebar.selectbox("Liga választása a csapathoz:", ["None"] + sorted(leagues_dict.keys()))
-selected_team = None
-if team_league != "None":
-    team_options = sorted(leagues_dict[team_league])
-    selected_team = st.sidebar.selectbox("Csapat választás:", team_options)
+    # Sidebar team selector
+    st.sidebar.title("Szúrés csapatra")
+    team_league = st.sidebar.selectbox("Liga választása a csapathoz:", ["None"] + sorted(leagues_dict.keys()))
+    selected_team = None
+    if team_league != "None":
+        team_options = sorted(leagues_dict[team_league])
+        selected_team = st.sidebar.selectbox("Csapat választás:", team_options)
 
-# Sidebar league selector
-st.sidebar.title("Szúrés ligára")
-league_names = ["Mind"] + sorted(leagues_dict.keys())
-selected_league = st.sidebar.radio("Liga választás:", league_names, horizontal=True)
+    # Sidebar league selector
+    st.sidebar.title("Szúrés ligára")
+    league_names = ["Mind"] + sorted(leagues_dict.keys())
+    selected_league = st.sidebar.radio("Liga választás:", league_names, horizontal=True)
 
-if selected_team:
-    highlight_teams = [selected_team]  # override everything else
-    st.markdown(f"### `{selected_team}` csapat sorsolása")
-elif selected_league == "Mind":
-    highlight_teams = None
-    st.markdown("### Teljes sorsolás")
-else:
-    highlight_teams = leagues_dict[selected_league]
-    st.markdown(f"### `{selected_league}` liga sorsolása")
+    if selected_team:
+        highlight_teams = [selected_team]  # override everything else
+        st.markdown(f"### `{selected_team}` csapat sorsolása")
+    elif selected_league == "Mind":
+        highlight_teams = None
+        st.markdown("### Teljes sorsolás")
+    else:
+        highlight_teams = leagues_dict[selected_league]
+        st.markdown(f"### `{selected_league}` liga sorsolása")
 
-# 6. Render main schedule
-render_week_tables(draw_structure, highlight_teams=highlight_teams)
+    # 6. Render main schedule
+    render_week_tables(draw_structure, highlight_teams=highlight_teams)
 
-# 7. Optional: Display metrics below (or add checkbox toggle)
-if st.sidebar.checkbox("DEV: Show Metrics and affected teams"):
-    total_metric, scores, number_of_matches, value_counts = calculate_final_metric(draw_structure, team_schedules)
+    # 7. Optional: Display metrics below (or add checkbox toggle)
+    if st.sidebar.checkbox("DEV: Show Metrics and affected teams"):
+        total_metric, scores, number_of_matches, value_counts = calculate_final_metric(draw_structure, team_schedules)
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("###Metric Details")
-    st.sidebar.markdown(f"**Total Score:** `{total_metric}`")
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("###Metric Details")
+        st.sidebar.markdown(f"**Total Score:** `{total_metric}`")
 
-    st.sidebar.markdown(f"• Availability: <span style='color:lime;'>{scores[0]}</span>", unsafe_allow_html=True)
-    st.sidebar.markdown(f"• Bunching: <span style='color:red;'>{scores[1]}</span>", unsafe_allow_html=True)
-    st.sidebar.markdown(f"• Idle Gaps: <span style='color:red;'>{scores[2]}</span>", unsafe_allow_html=True)
-    st.sidebar.markdown(f"• Spread: <span style='color:lime;'>{scores[3]}</span>", unsafe_allow_html=True)
+        st.sidebar.markdown(f"• Availability: <span style='color:lime;'>{scores[0]}</span>", unsafe_allow_html=True)
+        st.sidebar.markdown(f"• Bunching: <span style='color:red;'>{scores[1]}</span>", unsafe_allow_html=True)
+        st.sidebar.markdown(f"• Idle Gaps: <span style='color:red;'>{scores[2]}</span>", unsafe_allow_html=True)
+        st.sidebar.markdown(f"• Spread: <span style='color:lime;'>{scores[3]}</span>", unsafe_allow_html=True)
 
 
-    st.sidebar.markdown(f"**Total Matches:** `{number_of_matches}`")
+        st.sidebar.markdown(f"**Total Matches:** `{number_of_matches}`")
 
-    st.sidebar.markdown(f"Keys: [bad, no answer, might, good]")
-    st.sidebar.markdown(f"**Buckets:** `{value_counts}`")
+        st.sidebar.markdown(f"Keys: [bad, no answer, might, good]")
+        st.sidebar.markdown(f"**Buckets:** `{value_counts}`")
 
-    st.sidebar.markdown("###Scheduling Warnings")
-    for msg in scheduling_logs:
-        st.sidebar.markdown(f"- {msg}")
+        st.sidebar.markdown("###Scheduling Warnings")
+        for msg in scheduling_logs:
+            st.sidebar.markdown(f"- {msg}")
 
-    st.sidebar.markdown("**Violating Teams:**")
-    for team, league in sorted(violating_teams.items()):
-        st.sidebar.markdown(f"- `{team}` *({league})*")
+        st.sidebar.markdown("**Violating Teams:**")
+        for team, league in sorted(violating_teams.items()):
+            st.sidebar.markdown(f"- `{team}` *({league})*")
+
+if __name__ == "__main__":
+    main()
