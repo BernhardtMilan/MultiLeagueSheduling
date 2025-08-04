@@ -180,7 +180,7 @@ def build_draw_structure(parsed_schedule):
 
     return draw_structure
 
-def analyze_team_scheduling(team_weeks, leagues_dict):
+def analyze_team_scheduling(team_weeks, leagues_dict, draw_structure):
     from collections import defaultdict
 
     violating_teams = {}
@@ -215,6 +215,22 @@ def analyze_team_scheduling(team_weeks, leagues_dict):
         if len(set(weeks_list)) < 10:
             logs.append(f"[SPREAD] [{league}] Team '{team}' played in {len(set(weeks_list))} distinct weeks.")
             violating_teams[team] = league
+
+    # Identify first league (assumed to be first in sorted keys)
+    first_league_name = sorted(leagues_dict.keys())[0]
+    first_league_teams = set(leagues_dict[first_league_name])
+
+    for week in draw_structure:
+        for day in draw_structure[week]:
+            for time in draw_structure[week][day]:
+                pitches = draw_structure[week][day][time]
+                for pitch_number, match in pitches.items():
+                    if isinstance(match, tuple):
+                        team1, team2 = match
+                        for team in [team1, team2]:
+                            if team in first_league_teams and pitch_number != 1:
+                                logs.append(f"[PITCH] [L1] Team '{team}' is scheduled on Pitch {pitch_number} in {week}, {day}, {time}")
+                                violating_teams[team] = first_league_name
 
     return violating_teams, logs
 
@@ -281,7 +297,7 @@ def render_week_tables(draw_structure, highlight_teams=None):
 def main():
     # 1. Set page config once
     st.set_page_config(layout="wide")
-    st.title("Lámpafényes sorsolás 2025")
+    st.title("Villanyfényes sorsolás 2025")
 
     # 4. Load leagues dict only once
     if "leagues_dict" not in st.session_state:
@@ -297,7 +313,7 @@ def main():
         parsed = parse_schedule(df)
         draw_structure = build_draw_structure(parsed)
         team_weeks = extract_team_weeks(draw_structure)
-        violating_teams, scheduling_logs = analyze_team_scheduling(team_weeks, leagues_dict)
+        violating_teams, scheduling_logs = analyze_team_scheduling(team_weeks, leagues_dict, draw_structure)
         return draw_structure, team_weeks, violating_teams, team_schedules, scheduling_logs
 
     # 3. Load only once and reuse
@@ -370,3 +386,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    #streamlit run visualize_final.py

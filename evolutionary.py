@@ -288,6 +288,37 @@ def copy_draw_structure(draw):
         for week, week_data in draw.items()
     }
 
+def reorder_pitches(draw_structure, league_teams):
+    # Determine the first league's teams (e.g., L1)
+    first_league_name = sorted(league_teams.keys())[0]
+    first_league_set = set(league_teams[first_league_name])
+
+    def is_from_first_league(match):
+        if not isinstance(match, tuple):
+            return False
+        team1, team2 = match
+        return (team1 in first_league_set) or (team2 in first_league_set)
+
+    for week in draw_structure:
+        for day in draw_structure[week]:
+            for time in draw_structure[week][day]:
+                pitches = draw_structure[week][day][time]
+
+                # Skip if pitch 1 is occupied
+                if pitches.get(1) == "OCCUPIED TIMESLOT":
+                    continue
+
+                # If pitch 1 already has a first-league match, do nothing
+                if is_from_first_league(pitches.get(1)):
+                    continue
+
+                for p in range(2, 5):
+                    if is_from_first_league(pitches.get(p)) and pitches.get(p) != "OCCUPIED TIMESLOT":
+                        pitches[1], pitches[p] = pitches[p], pitches[1]
+                        break
+
+    return draw_structure
+
 if __name__ == "__main__":
     draw, team_schedules, possible_max_metric, league_teams = initial_sort(directory, plot=False)
 
@@ -383,6 +414,10 @@ if __name__ == "__main__":
     best_metric, best_scores, _, best_value_counts = final_metrics[0][0][0], final_metrics[0][0][1], final_metrics[0][0][2], final_metrics[0][0][3]
 
     best_draw = final_metrics[0][1]
+
+    # Manually reorder the pitches so the 1st league is always on the first pitch
+    best_draw = reorder_pitches(best_draw, league_teams)
+
     generate_output(best_draw, league_teams, filename="best_draw_output_from_evolutionary.xlsx")
 
     print("\nFINAL BEST RESULT")
