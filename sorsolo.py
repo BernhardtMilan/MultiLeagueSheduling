@@ -6,7 +6,6 @@ import time
 import pickle
 from itertools import combinations
 from collections import defaultdict, Counter
-from weights import weights
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font

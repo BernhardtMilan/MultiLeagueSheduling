@@ -2,7 +2,17 @@ import enlighten
 
 POPULATION_SIZE = 24
 SURVIVORS = 3
-GENERATIONS = 10000
+GENERATIONS = 20000
+
+targeting_treshold = 0.97
+target_or_random = 0.7
+
+weights = {
+    "availability": 4,
+    "match_bunching_penalty": -3,
+    "idle_gap_penalty": -1,
+    "spread_reward": 0.2
+}
 
 manager = enlighten.get_manager()
 progress = manager.counter(total=GENERATIONS, desc='Evolving', unit='gen', unit_scale=True, color='bright_black')

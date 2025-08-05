@@ -1,12 +1,12 @@
 import random
 import copy
+from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 from time import perf_counter, time
 
-from sorsolo import initial_sort, calculate_metric, calculate_final_metric, generate_output, DAY_INDEX, SLOT_INDEX
+from sorsolo import initial_sort, calculate_metric, calculate_final_metric, generate_output, DAY_INDEX, SLOT_INDEX, flatten_matches
 from init import *
-from weights import weights
 
 pitches = [1, 2, 3, 4]
 
@@ -45,7 +45,7 @@ def random_match_changes(draw_structure):
 
     # Ensure we have at least 2 slots to swap and at least 1 match slot
     if not match_slots:
-        return mutated_draw
+        return mutated_draw, None
 
     # select 1 match slot, so we cant swap two empty slots
     slot1 = random.choice(match_slots)
@@ -55,7 +55,7 @@ def random_match_changes(draw_structure):
     swappable_slots.remove(slot1)
 
     if len(swappable_slots) < 1:
-        return mutated_draw
+        return mutated_draw, None
 
     slot2 = random.choice(swappable_slots)
 
@@ -92,7 +92,7 @@ def match_change_no_same_week_no_same_day(draw_structure):
 
     # Ensure we have at least one match to move
     if not match_slots:
-        return mutated_draw
+        return mutated_draw, None
 
     # Select one match slot to relocate
     slot1 = random.choice(match_slots)
@@ -105,7 +105,7 @@ def match_change_no_same_week_no_same_day(draw_structure):
     ]
 
     if not swappable_slots:
-        return mutated_draw  # No valid second slot
+        return mutated_draw, None  # No valid second slot
 
     # Pick a second slot to swap with
     slot2 = random.choice(swappable_slots)
@@ -143,7 +143,7 @@ def random_until_good_match_mutation(draw_structure):
             break
 
     if not match_slot:
-        return mutated_draw  # No valid match found
+        return mutated_draw, None  # No valid match found
 
     # Find a valid empty slot
     match_week, match_day, _, _ = match_slot
@@ -163,7 +163,7 @@ def random_until_good_match_mutation(draw_structure):
             break
 
     if not swap_slot:
-        return mutated_draw  # No suitable target slot found
+        return mutated_draw, None  # No suitable target slot found
 
     w1, d1, t1, p1 = match_slot
     w2, d2, t2, p2 = swap_slot
@@ -173,6 +173,103 @@ def random_until_good_match_mutation(draw_structure):
     mutated_draw[w2][d2][t2][p2] = temp
 
     return mutated_draw, (match_slot, swap_slot, swapped_first, swapped_second)
+
+def targeted_mutation(draw_structure, targeted_teams, week_list):
+    mutated_draw = draw_structure
+    target_slots = []
+    all_swappable_slots = []
+
+    for week in weeks:
+        for day in days_of_week:
+            for time in time_slots:
+                for pitch in pitches:
+                    content = mutated_draw[week][day][time][pitch]
+                    slot = (week, day, time, pitch)
+
+                    if content == "OCCUPIED TIMESLOT":
+                        continue
+
+                    all_swappable_slots.append(slot)
+
+                    if isinstance(content, tuple):
+                        team1, team2 = content
+                        if team1 in targeted_teams or team2 in targeted_teams:
+                            target_slots.append(slot)
+
+    if not target_slots:
+        return mutated_draw, None
+
+    targeted_slot = random.choice(target_slots)
+    w1, d1, t1, p1 = targeted_slot
+    week_index_target = int(w1.split()[1]) - 1  # convert "Week X" to 0-based index
+
+    # Get teams in the targeted match
+    targeted_match = mutated_draw[w1][d1][t1][p1]
+    if not isinstance(targeted_match, tuple):
+        return mutated_draw, None
+    team1, team2 = targeted_match
+
+    # Second pass: collect swappable slots (excluding same-week matches for these teams)
+    for week in weeks:
+        week_index = int(week.split()[1]) - 1
+        for day in days_of_week:
+            for time in time_slots:
+                for pitch in pitches:
+                    if week_index == week_index_target:
+                        continue  # Skip same week
+
+                    content = mutated_draw[week][day][time][pitch]
+                    slot = (week, day, time, pitch)
+
+                    if content == "OCCUPIED TIMESLOT":
+                        continue
+
+                    # Check week constraint for team1 and team2
+                    if week_list[team1][week_index] > 0 or week_list[team2][week_index] > 0:
+                        continue
+
+                    all_swappable_slots.append(slot)
+
+    if not all_swappable_slots:
+        return mutated_draw, None
+
+    swap_slot = random.choice(all_swappable_slots)
+    w2, d2, t2, p2 = swap_slot
+
+    fisrt = mutated_draw[w1][d1][t1][p1]
+    second = mutated_draw[w2][d2][t2][p2]
+
+    mutated_draw[w1][d1][t1][p1] = second
+    mutated_draw[w2][d2][t2][p2] = fisrt
+
+    return mutated_draw, (targeted_slot, swap_slot, fisrt, second)
+
+def get_teams_to_target(draw_structure, team_schedules):
+    teams_to_target = []
+
+    matches = flatten_matches(draw_structure)
+    team_week_counts = defaultdict(lambda: [0] * 16)
+
+    for week_idx, day_key, timeslot_key, (team1, team2) in matches:
+        team_week_counts[team1][week_idx - 1] += 1
+        team_week_counts[team2][week_idx - 1] += 1
+
+    for team, counts in team_week_counts.items():
+        weeks_played = [i for i, count in enumerate(counts) if count > 0]
+
+        # bunching
+        has_bunching_penalty = any(count > 1 for count in counts)
+
+        # idle gaps
+        has_idle_gap_penalty = False
+        if len(weeks_played) > 1:
+            gaps = [weeks_played[i + 1] - weeks_played[i] - 1 for i in range(len(weeks_played) - 1)]
+            has_idle_gap_penalty = any(gap >= 2 for gap in gaps)
+
+        if has_bunching_penalty or has_idle_gap_penalty:
+            teams_to_target.append(team)
+
+    return teams_to_target
 
 def calculate_availability_change(team_schedules, changes):
 
@@ -228,6 +325,9 @@ def calculate_new_week_list(week_list, changes):
     return new_week_list
 
 def caluclate_metric_change(old_metric, week_list, changes, team_schedules):
+
+    if changes is None:
+        return old_metric, week_list
 
     change_in_availability = calculate_availability_change(team_schedules, changes)
     change_in_bunching_penalty = 0
@@ -334,8 +434,13 @@ if __name__ == "__main__":
     generations_completed = 0
 
     patience = 2000  # How many generations to wait for improvement
-    min_delta = 0  # Minimum improvement required
+    min_delta = 0.1  # Minimum improvement required
     stagnation_counter = 0
+
+    # store the problematic teams for targeted mutation
+    targeted_teams = []
+    targeting = False
+    mutation_type_counts = {"targeted": 0, "general": 0}
 
     mutations_per_survivor = (POPULATION_SIZE - SURVIVORS) // SURVIVORS
     extra_mutations = (POPULATION_SIZE - SURVIVORS) % SURVIVORS
@@ -366,7 +471,7 @@ if __name__ == "__main__":
                     break
             else:
                 stagnation_counter = 0  # Reset if improvement found
-        if current_best_metric == possible_max_metric:
+        if current_best_metric >= possible_max_metric:
             print(f"\nReached possible maximum metric at generation {generation + 1}")
             break
         
@@ -381,6 +486,8 @@ if __name__ == "__main__":
             else: # IF there is no previous generation to compare to
                 progress.update(10)
 
+        targeting = current_best_metric > possible_max_metric * targeting_treshold
+
         # Create next gen
         new_draws = []
         new_metrics = []
@@ -392,15 +499,29 @@ if __name__ == "__main__":
 
             num_mutations = mutations_per_survivor + (1 if i < extra_mutations else 0)
             for _ in range(num_mutations):
-                #new_draw, changes = random_match_changes(copy_draw_structure(best[i][1]))
-                #new_draw, changes = match_change_no_same_week_no_same_day(copy_draw_structure(best[i][1]))
-                new_draw, changes = random_until_good_match_mutation(copy_draw_structure(best[i][1]))
+
+                if targeting and random.random() < target_or_random:
+                    #Targeted mutation
+                    new_draw, changes = targeted_mutation(copy_draw_structure(best[i][1]), targeted_teams, week_list=best[i][2])
+                    mutation_type_counts["targeted"] += 1
+                else:
+                    #general mutation
+                    #new_draw, changes = random_match_changes(copy_draw_structure(best[i][1]))
+                    #new_draw, changes = match_change_no_same_week_no_same_day(copy_draw_structure(best[i][1]))
+                    new_draw, changes = random_until_good_match_mutation(copy_draw_structure(best[i][1]))
+                    mutation_type_counts["general"] += 1
 
                 new_metric, new_team_week_counts = caluclate_metric_change(old_metric=best[i][0], week_list=best[i][2], changes=changes, team_schedules=team_schedules)
 
                 new_draws.append(new_draw)
                 new_metrics.append(new_metric)
                 new_team_week_counts_list.append(new_team_week_counts)
+
+        if targeting and random.random() < 0.1:
+            targeted_teams = get_teams_to_target(draw_structure=best[0][1], team_schedules=team_schedules)
+            print(f"Targeting {len(targeted_teams)} teams")
+            if len(targeted_teams) < 10:
+                print(targeted_teams)
 
         draws = new_draws
         metrics = new_metrics
