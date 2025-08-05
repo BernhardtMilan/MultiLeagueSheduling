@@ -227,10 +227,10 @@ def analyze_team_scheduling(team_weeks, leagues_dict, draw_structure):
                 for pitch_number, match in pitches.items():
                     if isinstance(match, tuple):
                         team1, team2 = match
-                        for team in [team1, team2]:
-                            if team in first_league_teams and pitch_number != 1:
-                                logs.append(f"[PITCH] [L1] Team '{team}' is scheduled on Pitch {pitch_number} in {week}, {day}, {time}")
+                        if team1 in first_league_teams and pitch_number != 1:
+                            for team in [team1, team2]:
                                 violating_teams[team] = first_league_name
+                            logs.append(f"[PITCH] [L1] Teams '{team1}' and '{team2}' is scheduled on Pitch {pitch_number} in {week}, {day}, {time}")
 
     return violating_teams, logs
 
@@ -359,7 +359,7 @@ def main():
 
     # 7. Optional: Display metrics below (or add checkbox toggle)
     if st.sidebar.checkbox("DEV: Show Metrics and affected teams"):
-        total_metric, scores, number_of_matches, value_counts = calculate_final_metric(draw_structure, team_schedules)
+        total_metric, scores, number_of_matches, value_counts = calculate_final_metric(draw_structure, team_schedules, leagues_dict)
 
         st.sidebar.markdown("---")
         st.sidebar.markdown("###Metric Details")
@@ -369,6 +369,7 @@ def main():
         st.sidebar.markdown(f"• Bunching: <span style='color:red;'>{scores[1]}</span>", unsafe_allow_html=True)
         st.sidebar.markdown(f"• Idle Gaps: <span style='color:red;'>{scores[2]}</span>", unsafe_allow_html=True)
         st.sidebar.markdown(f"• Spread: <span style='color:lime;'>{scores[3]}</span>", unsafe_allow_html=True)
+        st.sidebar.markdown(f"• L1 Pitch Penalty: <span style='color:red;'>{scores[4]}</span>", unsafe_allow_html=True)
 
 
         st.sidebar.markdown(f"**Total Matches:** `{number_of_matches}`")

@@ -57,6 +57,9 @@ def add_occupied_times(draw_structure):
 
 # Function to process a single Excel file
 def process_excel_file(excel_file):
+
+    allowed_values = {-2, 0, 1, 2}
+
     try:
         df = pd.read_excel(excel_file, header=None)
 
@@ -249,12 +252,12 @@ def flatten_matches(draw_structure):
     for week_idx, week in enumerate(draw_structure.values(), start=1):
         for day_key, day in week.items():
             for timeslot_key, timeslot in day.items():
-                for match in timeslot.values():
+                for pitch, match in timeslot.items():
                     if match and match != "OCCUPIED TIMESLOT":
-                        matches.append((week_idx, day_key, timeslot_key, match))
+                        matches.append((week_idx, day_key, timeslot_key, pitch, match))
     return matches
 
-def calculate_metric(draw_structure, team_schedules):
+def calculate_metric(draw_structure, team_schedules, league_teams):
 
     #start_time = time.time()
 
@@ -264,7 +267,10 @@ def calculate_metric(draw_structure, team_schedules):
 
     matches = flatten_matches(draw_structure)
 
-    for week_idx, day_key, timeslot_key, (team1, team2) in matches:
+    L1_teams = set(league_teams["L1"])
+    L1_pitch_penalty = 0
+
+    for week_idx, day_key, timeslot_key, pitch, (team1, team2) in matches:
         team1_schedule = team_schedules[team1]
         team2_schedule = team_schedules[team2]
 
@@ -279,6 +285,9 @@ def calculate_metric(draw_structure, team_schedules):
         team_week_counts[team1][week_idx - 1] += 1
         team_week_counts[team2][week_idx - 1] += 1
 
+        # L1 pitch penalty
+        if team1 in L1_teams and pitch != 1:
+            L1_pitch_penalty += 1
 
     bunching_penalty = 0
     idle_gap_penalty = 0
@@ -300,6 +309,7 @@ def calculate_metric(draw_structure, team_schedules):
         + weights["match_bunching_penalty"] * bunching_penalty
         + weights["idle_gap_penalty"] * idle_gap_penalty
         + weights["spread_reward"] * spread_reward
+        + weights["L1_pitch_penalty"] * L1_pitch_penalty
     )
 
     #elapsed = time.time() - start_time
@@ -307,7 +317,7 @@ def calculate_metric(draw_structure, team_schedules):
 
     return total_metric, team_week_counts
 
-def calculate_final_metric(draw_structure, team_schedules):
+def calculate_final_metric(draw_structure, team_schedules, league_teams):
 
     total_availability_score = 0
     number_of_matches = 0
@@ -316,10 +326,13 @@ def calculate_final_metric(draw_structure, team_schedules):
 
     team_weeks = defaultdict(list)
 
+    L1_teams = set(league_teams["L1"])
+    L1_pitch_penalty = 0
+
     for week_idx, (week_name, week) in enumerate(draw_structure.items(), start=1):
         for day_key, day in week.items():
             for timeslot_key, timeslot in day.items():
-                for match in timeslot.values():
+                for pitch, match in timeslot.items():
                     if match and match != "OCCUPIED TIMESLOT":
                         team1, team2 = match
                         team1_schedule = team_schedules[team1]
@@ -352,6 +365,9 @@ def calculate_final_metric(draw_structure, team_schedules):
                         team_weeks[team1].append(week_idx)
                         team_weeks[team2].append(week_idx)
 
+                        if team1 in L1_teams and pitch != 1:
+                            L1_pitch_penalty += 1
+
     bunching_penalty = 0
     idle_gap_penalty = 0
     spread_reward = 0
@@ -383,9 +399,10 @@ def calculate_final_metric(draw_structure, team_schedules):
         + weights["match_bunching_penalty"] * bunching_penalty
         + weights["idle_gap_penalty"] * idle_gap_penalty
         + weights["spread_reward"] * spread_reward
+        + weights["L1_pitch_penalty"] * L1_pitch_penalty
     )
 
-    scores = [total_availability_score, bunching_penalty, idle_gap_penalty, spread_reward]
+    scores = [total_availability_score, bunching_penalty, idle_gap_penalty, spread_reward, L1_pitch_penalty]
 
     return total_metric, scores, number_of_matches, value_counts
 
@@ -523,7 +540,7 @@ def initial_sort(directory, plot=True):
 
     draw_structure = sort_random_matches(draw_structure, leagues_all_games)
 
-    metric, scores, number_of_matches, value_counts = calculate_final_metric(draw_structure, team_schedules)
+    metric, scores, number_of_matches, value_counts = calculate_final_metric(draw_structure, team_schedules, league_teams)
 
     if plot:
         print("")
@@ -545,10 +562,10 @@ def initial_sort(directory, plot=True):
         print(metric)
         print("")
         print("Scores:")
-        print("[total_availability_score, bunching_penalty, idle_gap_penalty, spread_reward]")
+        print("[total_availability_score, bunching_penalty, idle_gap_penalty, spread_reward, L1_pitch_penalty]")
         print(scores)
         print("Weighted scores:")
-        print(f'[{weights["availability"] * scores[0]}, {weights["match_bunching_penalty"] * scores[1]}, {weights["idle_gap_penalty"] * scores[2]}, {weights["spread_reward"] * scores[3]}]')
+        print(f'[{weights["availability"] * scores[0]}, {weights["match_bunching_penalty"] * scores[1]}, {weights["idle_gap_penalty"] * scores[2]}, {weights["spread_reward"] * scores[3]}, {weights["L1_pitch_penalty"] * scores[4]}]')
         print("")
         print("The number of matches:")
         print(number_of_matches)

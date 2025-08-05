@@ -2,16 +2,22 @@ import enlighten
 
 POPULATION_SIZE = 24
 SURVIVORS = 3
-GENERATIONS = 20000
+GENERATIONS = 60000
 
 targeting_treshold = 0.97
 target_or_random = 0.7
+
+#early stopping
+patience = 5000
+min_delta = 0.1
+stagnation_counter = 0
 
 weights = {
     "availability": 4,
     "match_bunching_penalty": -3,
     "idle_gap_penalty": -1,
-    "spread_reward": 0.2
+    "spread_reward": 0.2,
+    "L1_pitch_penalty": -1.5,
 }
 
 manager = enlighten.get_manager()
@@ -22,9 +28,6 @@ old_directory = './old_tables/'
 optimal_directory = './optimal_tables/'
 
 directory = optimal_directory
-
-# Allowed values in the colored schedule table
-allowed_values = {-2, 0, 1, 2}
 
 devision_strategy="pairwise" # random, knn or pairwise
 

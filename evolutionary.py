@@ -174,7 +174,7 @@ def random_until_good_match_mutation(draw_structure):
 
     return mutated_draw, (match_slot, swap_slot, swapped_first, swapped_second)
 
-def targeted_mutation(draw_structure, targeted_teams, week_list):
+def targeted_mutation(draw_structure, targeted_teams, week_list, league_teams):
     mutated_draw = draw_structure
     target_slots = []
     all_swappable_slots = []
@@ -189,8 +189,6 @@ def targeted_mutation(draw_structure, targeted_teams, week_list):
                     if content == "OCCUPIED TIMESLOT":
                         continue
 
-                    all_swappable_slots.append(slot)
-
                     if isinstance(content, tuple):
                         team1, team2 = content
                         if team1 in targeted_teams or team2 in targeted_teams:
@@ -201,7 +199,7 @@ def targeted_mutation(draw_structure, targeted_teams, week_list):
 
     targeted_slot = random.choice(target_slots)
     w1, d1, t1, p1 = targeted_slot
-    week_index_target = int(w1.split()[1]) - 1  # convert "Week X" to 0-based index
+    week_index_target = int(w1.split()[1]) - 1
 
     # Get teams in the targeted match
     targeted_match = mutated_draw[w1][d1][t1][p1]
@@ -209,26 +207,28 @@ def targeted_mutation(draw_structure, targeted_teams, week_list):
         return mutated_draw, None
     team1, team2 = targeted_match
 
-    # Second pass: collect swappable slots (excluding same-week matches for these teams)
+    # if the targeted team is L1, then only swap to pitch 1
+    is_L1_match = team1 in league_teams["L1"]
+
     for week in weeks:
         week_index = int(week.split()[1]) - 1
+        if week_index == week_index_target:
+            continue  # Skip same week
+
         for day in days_of_week:
             for time in time_slots:
                 for pitch in pitches:
-                    if week_index == week_index_target:
-                        continue  # Skip same week
+                    if is_L1_match and pitch != 1:
+                        continue
 
                     content = mutated_draw[week][day][time][pitch]
-                    slot = (week, day, time, pitch)
-
                     if content == "OCCUPIED TIMESLOT":
                         continue
 
-                    # Check week constraint for team1 and team2
                     if week_list[team1][week_index] > 0 or week_list[team2][week_index] > 0:
                         continue
 
-                    all_swappable_slots.append(slot)
+                    all_swappable_slots.append((week, day, time, pitch))
 
     if not all_swappable_slots:
         return mutated_draw, None
@@ -236,23 +236,32 @@ def targeted_mutation(draw_structure, targeted_teams, week_list):
     swap_slot = random.choice(all_swappable_slots)
     w2, d2, t2, p2 = swap_slot
 
-    fisrt = mutated_draw[w1][d1][t1][p1]
+    first = mutated_draw[w1][d1][t1][p1]
     second = mutated_draw[w2][d2][t2][p2]
 
     mutated_draw[w1][d1][t1][p1] = second
-    mutated_draw[w2][d2][t2][p2] = fisrt
+    mutated_draw[w2][d2][t2][p2] = first
 
-    return mutated_draw, (targeted_slot, swap_slot, fisrt, second)
+    return mutated_draw, (targeted_slot, swap_slot, first, second)
 
-def get_teams_to_target(draw_structure, team_schedules):
+def get_teams_to_target(draw_structure, team_schedules, league_teams):
     teams_to_target = []
 
     matches = flatten_matches(draw_structure)
     team_week_counts = defaultdict(lambda: [0] * 16)
 
-    for week_idx, day_key, timeslot_key, (team1, team2) in matches:
+    L1_teams = set(league_teams["L1"])
+
+    for week_idx, day_key, timeslot_key, pitch, (team1, team2) in matches:
         team_week_counts[team1][week_idx - 1] += 1
         team_week_counts[team2][week_idx - 1] += 1
+
+        # l1 teams with wrong pitch
+        if pitch != 1:
+            if team1 in L1_teams:
+                teams_to_target.append(team1)
+            if team2 in L1_teams:
+                teams_to_target.append(team2)
 
     for team, counts in team_week_counts.items():
         weeks_played = [i for i, count in enumerate(counts) if count > 0]
@@ -324,7 +333,7 @@ def calculate_new_week_list(week_list, changes):
 
     return new_week_list
 
-def caluclate_metric_change(old_metric, week_list, changes, team_schedules):
+def caluclate_metric_change(old_metric, week_list, changes, team_schedules, league_teams):
 
     if changes is None:
         return old_metric, week_list
@@ -333,6 +342,7 @@ def caluclate_metric_change(old_metric, week_list, changes, team_schedules):
     change_in_bunching_penalty = 0
     change_in_spread_reward = 0
     change_in_idle_gap_penalty = 0
+    change_in_l1_pitch_penalty = 0
 
     #update the week list with the changes
     new_week_list = calculate_new_week_list(week_list, changes)
@@ -366,12 +376,31 @@ def caluclate_metric_change(old_metric, week_list, changes, team_schedules):
 
         change_in_idle_gap_penalty += new_idle - old_idle
 
+    # L1 pitches
+    L1_teams = set(league_teams["L1"])
+    slot1, slot2, match1, match2 = changes
+
+    def l1_penalty(match, pitch):
+        if isinstance(match, tuple):
+            team1 = match[0]
+            if team1 in L1_teams and pitch != 1:
+                return 1
+        return 0
+
+    old_slot1_pitch = slot1[3]
+    old_slot2_pitch = slot2[3]
+    old_l1_penalty = l1_penalty(match1, old_slot1_pitch) + l1_penalty(match2, old_slot2_pitch)
+    new_l1_penalty = l1_penalty(match1, old_slot2_pitch) + l1_penalty(match2, old_slot1_pitch)
+
+    change_in_l1_pitch_penalty = new_l1_penalty - old_l1_penalty
+
     new_metric = (
         old_metric +
         weights["availability"] * change_in_availability +
         weights["match_bunching_penalty"] * change_in_bunching_penalty +
         weights["idle_gap_penalty"] * change_in_idle_gap_penalty +
-        weights["spread_reward"] * change_in_spread_reward
+        weights["spread_reward"] * change_in_spread_reward +
+        weights["L1_pitch_penalty"] * change_in_l1_pitch_penalty
     )
 
     return new_metric, new_week_list
@@ -427,15 +456,11 @@ if __name__ == "__main__":
     #for the metric delta we need the week counts
     # Start with 10 mutated versions of the original draw
     draws = [copy.deepcopy(draw) for _ in range(POPULATION_SIZE)]
-    results = [calculate_metric(d, team_schedules) for d in draws]
+    results = [calculate_metric(d, team_schedules, league_teams) for d in draws]
     metrics = [r[0] for r in results]
     team_week_counts_list = [r[1] for r in results]
 
     generations_completed = 0
-
-    patience = 2000  # How many generations to wait for improvement
-    min_delta = 0.1  # Minimum improvement required
-    stagnation_counter = 0
 
     # store the problematic teams for targeted mutation
     targeted_teams = []
@@ -468,11 +493,15 @@ if __name__ == "__main__":
                 stagnation_counter += 1
                 if stagnation_counter >= patience:
                     print(f"\nEarly stopping at generation {generation + 1} due to no significant improvement.")
+                    best_metrics.append(current_best_metric)
+                    generations_completed += 1
                     break
             else:
                 stagnation_counter = 0  # Reset if improvement found
         if current_best_metric >= possible_max_metric:
             print(f"\nReached possible maximum metric at generation {generation + 1}")
+            best_metrics.append(current_best_metric)
+            generations_completed += 1
             break
         
         best_metrics.append(current_best_metric)
@@ -502,7 +531,7 @@ if __name__ == "__main__":
 
                 if targeting and random.random() < target_or_random:
                     #Targeted mutation
-                    new_draw, changes = targeted_mutation(copy_draw_structure(best[i][1]), targeted_teams, week_list=best[i][2])
+                    new_draw, changes = targeted_mutation(copy_draw_structure(best[i][1]), targeted_teams, week_list=best[i][2], league_teams=league_teams)
                     mutation_type_counts["targeted"] += 1
                 else:
                     #general mutation
@@ -511,17 +540,15 @@ if __name__ == "__main__":
                     new_draw, changes = random_until_good_match_mutation(copy_draw_structure(best[i][1]))
                     mutation_type_counts["general"] += 1
 
-                new_metric, new_team_week_counts = caluclate_metric_change(old_metric=best[i][0], week_list=best[i][2], changes=changes, team_schedules=team_schedules)
+                new_metric, new_team_week_counts = caluclate_metric_change(old_metric=best[i][0], week_list=best[i][2], changes=changes, team_schedules=team_schedules, league_teams=league_teams)
 
                 new_draws.append(new_draw)
                 new_metrics.append(new_metric)
                 new_team_week_counts_list.append(new_team_week_counts)
 
         if targeting and random.random() < 0.1:
-            targeted_teams = get_teams_to_target(draw_structure=best[0][1], team_schedules=team_schedules)
+            targeted_teams = get_teams_to_target(draw_structure=best[0][1], team_schedules=team_schedules, league_teams=league_teams)
             print(f"Targeting {len(targeted_teams)} teams")
-            if len(targeted_teams) < 10:
-                print(targeted_teams)
 
         draws = new_draws
         metrics = new_metrics
@@ -529,7 +556,7 @@ if __name__ == "__main__":
         generations_completed += 1
 
     # Get the final best draw after all generations
-    final_metrics = [(calculate_final_metric(d, team_schedules), d) for d in draws]
+    final_metrics = [(calculate_final_metric(d, team_schedules, league_teams), d) for d in draws]
     final_metrics.sort(key=lambda x: -x[0][0])  # Sort by metric
 
     best_metric, best_scores, _, best_value_counts = final_metrics[0][0][0], final_metrics[0][0][1], final_metrics[0][0][2], final_metrics[0][0][3]
@@ -537,18 +564,18 @@ if __name__ == "__main__":
     best_draw = final_metrics[0][1]
 
     # Manually reorder the pitches so the 1st league is always on the first pitch
-    best_draw = reorder_pitches(best_draw, league_teams)
+    #best_draw = reorder_pitches(best_draw, league_teams)
 
     generate_output(best_draw, league_teams, filename="best_draw_output_from_evolutionary.xlsx")
 
     print("\nFINAL BEST RESULT")
     print("----------------------------")
     print(f"Best METRIC: {best_metric}")
-    print("[total_availability_score, bunching_penalty, idle_gap_penalty, spread_reward]")
+    print("[total_availability_score, bunching_penalty, idle_gap_penalty, spread_reward, L1_pitch_penalty]")
     print("Final best draw scores:")
     print(best_scores)
     print("Weighted scores:")
-    print(f'[{weights["availability"] * best_scores[0]}, {weights["match_bunching_penalty"] * best_scores[1]}, {weights["idle_gap_penalty"] * best_scores[2]}, {weights["spread_reward"] * best_scores[3]}]')
+    print(f'[{weights["availability"] * best_scores[0]}, {weights["match_bunching_penalty"] * best_scores[1]}, {weights["idle_gap_penalty"] * best_scores[2]}, {weights["spread_reward"] * best_scores[3]}, {weights["L1_pitch_penalty"] * best_scores[4]}]')
     print("")
     print("Final best draw value_counts:")
     print(best_value_counts)
