@@ -6,3 +6,4 @@ venv/
 *.png
 __pycache__/
 *.pdf
+ssh.txt
