@@ -448,10 +448,10 @@ def reorder_pitches(draw_structure, league_teams):
 
     return draw_structure
 
-if __name__ == "__main__":
-    draw, team_schedules, possible_max_metric, league_teams = initial_sort(directory, plot=False)
+def evolutionary(draw, team_schedules, possible_max_metric, league_teams, plot):
 
-    print("Initial sort done, starting evolutionary algorithm...")
+    print("")
+    print("Starting evolutionary algorithm...")
 
     #for the metric delta we need the week counts
     # Start with 10 mutated versions of the original draw
@@ -548,7 +548,7 @@ if __name__ == "__main__":
 
         if targeting and random.random() < 0.1:
             targeted_teams = get_teams_to_target(draw_structure=best[0][1], team_schedules=team_schedules, league_teams=league_teams)
-            print(f"Targeting {len(targeted_teams)} teams")
+            #print(f"Targeting {len(targeted_teams)} teams")
 
         draws = new_draws
         metrics = new_metrics
@@ -581,21 +581,26 @@ if __name__ == "__main__":
     print(best_value_counts)
     print("[bad, no answer, might, good]")
 
-    plt.figure(figsize=(8, 5))
-    plt.plot(range(1, generations_completed + 1), best_metrics, marker='o', label='Best Metric per Generation')
+    if plot:
 
-    plt.axhline(y=possible_max_metric, color='red', linestyle='--', label='Max Metric')
+        plt.figure(figsize=(8, 5))
+        plt.plot(range(1, generations_completed + 1), best_metrics, marker='o', label='Best Metric per Generation')
 
-    best_gen = np.argmax(best_metrics) + 1
-    best_val = max(best_metrics)
-    plt.plot(best_gen, best_val, 'ro')
-    plt.text(best_gen, best_val, f"  Best: {best_val:.0f}", color='red')
+        plt.axhline(y=possible_max_metric, color='red', linestyle='--', label='Max Metric')
 
-    plt.title(f"Best Metric Score per Generation with {POPULATION_SIZE} individuals")
-    plt.xlabel("Generation")
-    plt.ylabel("Best Metric")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+        best_gen = np.argmax(best_metrics) + 1
+        best_val = max(best_metrics)
+        plt.plot(best_gen, best_val, 'ro')
+        plt.text(best_gen, best_val, f"  Best: {best_val:.0f}", color='red')
 
+        plt.title(f"Best Metric Score per Generation with {POPULATION_SIZE} individuals")
+        plt.xlabel("Generation")
+        plt.ylabel("Best Metric")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+if __name__ == "__main__":
+    draw, team_schedules, possible_max_metric, league_teams = initial_sort(directory, plot=False)
+    evolutionary(draw, team_schedules, possible_max_metric, league_teams, plot=True)

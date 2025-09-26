@@ -207,7 +207,7 @@ def visualize_metric(draw_structure, team_schedules, league_teams, devided_leagu
 
     ScheduleValidator(draw_structure, devided_leagues, division_counts)
 
-if __name__ == "__main__":
+def run_non_ai_sorts():
 
     plot = False
 
@@ -219,11 +219,13 @@ if __name__ == "__main__":
 
     leagues, team_schedules = get_input_data_from_saves(directory, plot)
 
-    devided_leagues, division_counts = devide_leagues(leagues, "random", plot)
+    devided_leagues, division_counts = devide_leagues(leagues, devision_strategy, plot)
 
     league_teams = build_league_team_map(devided_leagues, league_names)
 
     leagues_all_games = create_all_pairs(devided_leagues)
+
+    possible_max_metric = calculate_possible_max_metric(leagues_all_games)
 
     random_draw_structure = pure_random_sort(draw_structures[0], leagues_all_games)
     visualize_metric(random_draw_structure, team_schedules, league_teams, devided_leagues, division_counts, "RANDOM")
@@ -233,3 +235,8 @@ if __name__ == "__main__":
 
     impoved_greedy_draw_structure = improved_greedy_sort(draw_structures[2], leagues_all_games, league_teams, team_schedules)
     visualize_metric(impoved_greedy_draw_structure, team_schedules, league_teams, devided_leagues, division_counts, "IMPROVED GREEDY")
+
+    return (team_schedules, possible_max_metric, league_teams, random_draw_structure, greedy_draw_structure, impoved_greedy_draw_structure)
+
+if __name__ == "__main__":
+    run_non_ai_sorts()
