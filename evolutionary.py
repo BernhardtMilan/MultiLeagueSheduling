@@ -601,6 +601,8 @@ def evolutionary(draw, team_schedules, possible_max_metric, league_teams, plot):
         plt.tight_layout()
         plt.show()
 
+    return best_metric, best_draw, best_scores, best_value_counts
+
 if __name__ == "__main__":
     draw, team_schedules, possible_max_metric, league_teams = initial_sort(directory, plot=False)
-    evolutionary(draw, team_schedules, possible_max_metric, league_teams, plot=True)
+    _, _, _, _ = evolutionary(draw, team_schedules, possible_max_metric, league_teams, plot=True)

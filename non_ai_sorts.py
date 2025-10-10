@@ -187,6 +187,7 @@ def improved_greedy_sort(draw_structure, leagues_all_games, league_teams, team_s
     return draw_structure
 
 def visualize_metric(draw_structure, team_schedules, league_teams, devided_leagues, division_counts, method):
+    
     metric, scores, number_of_matches, value_counts = calculate_final_metric(draw_structure, team_schedules, league_teams)
 
     print(f"--------------------------{method} SORT-----------------------------------")
@@ -206,6 +207,8 @@ def visualize_metric(draw_structure, team_schedules, league_teams, devided_leagu
     print(value_counts)
 
     ScheduleValidator(draw_structure, devided_leagues, division_counts)
+
+    return (draw_structure, metric, scores, value_counts)
 
 def run_non_ai_sorts():
 
@@ -228,15 +231,15 @@ def run_non_ai_sorts():
     possible_max_metric = calculate_possible_max_metric(leagues_all_games)
 
     random_draw_structure = pure_random_sort(draw_structures[0], leagues_all_games)
-    visualize_metric(random_draw_structure, team_schedules, league_teams, devided_leagues, division_counts, "RANDOM")
+    rendom_draw_data = visualize_metric(random_draw_structure, team_schedules, league_teams, devided_leagues, division_counts, "RANDOM")
 
     greedy_draw_structure = greedy_sort(draw_structures[1], leagues_all_games, league_teams, team_schedules)
-    visualize_metric(greedy_draw_structure, team_schedules, league_teams, devided_leagues, division_counts, "GREEDY")
+    greedy_draw_data= visualize_metric(greedy_draw_structure, team_schedules, league_teams, devided_leagues, division_counts, "GREEDY")
 
     impoved_greedy_draw_structure = improved_greedy_sort(draw_structures[2], leagues_all_games, league_teams, team_schedules)
-    visualize_metric(impoved_greedy_draw_structure, team_schedules, league_teams, devided_leagues, division_counts, "IMPROVED GREEDY")
+    improved_greedy_draw_data = visualize_metric(impoved_greedy_draw_structure, team_schedules, league_teams, devided_leagues, division_counts, "IMPROVED GREEDY")
 
-    return (team_schedules, possible_max_metric, league_teams, random_draw_structure, greedy_draw_structure, impoved_greedy_draw_structure)
+    return (team_schedules, possible_max_metric, league_teams, rendom_draw_data, greedy_draw_data, improved_greedy_draw_data)
 
 if __name__ == "__main__":
-    run_non_ai_sorts()
+    _ = run_non_ai_sorts()

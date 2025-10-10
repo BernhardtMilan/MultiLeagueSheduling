@@ -153,7 +153,7 @@ def assign_random_teams_to_groups(league_items, group_sizes):
     return divided
 
 def plot_all_leagues_clusters(divided_leagues, division_counts, method="tsne"):
-    import umap.umap_ as umap
+    #import umap.umap_ as umap
     from sklearn.decomposition import PCA
     
     reducer_cls = {
@@ -265,6 +265,6 @@ def devide_leagues(leagues, strategy="random", plot=True):
 
     if plot:
         #plot_all_leagues_clusters(divided, division_counts, method="tsne")
-        plot_all_leagues_clusters(divided, division_counts, method="umap")
-        #plot_all_leagues_clusters(divided, division_counts, method="pca")
+        #plot_all_leagues_clusters(divided, division_counts, method="umap")
+        plot_all_leagues_clusters(divided, division_counts, method="pca")
     return divided, division_counts

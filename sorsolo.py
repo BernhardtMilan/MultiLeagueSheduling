@@ -263,7 +263,7 @@ def calculate_metric(draw_structure, team_schedules, league_teams):
 
     total_availability_score = 0
 
-    team_week_counts = defaultdict(lambda: [0] * 16)
+    team_week_counts = defaultdict(lambda: [0] * number_of_weeks)
 
     matches = flatten_matches(draw_structure)
 
@@ -554,8 +554,11 @@ def initial_sort(directory, plot=True):
         print("Week 10, Monday, 18:00-19:00:")
         print(draw_structure["Week 10"]["Monday"]["18:00-19:00"])
         print("")
-        print("Week 14, Monday, 20:00-21:00:")
-        print(draw_structure["Week 14"]["Monday"]["20:00-21:00"])
+        try:
+            print("Week 14, Monday, 20:00-21:00:")
+            print(draw_structure["Week 14"]["Monday"]["20:00-21:00"])
+        except KeyError:
+            print("Week 14, Monday, 20:00-21:00: Not available")
 
         print("")
         print("METRIC:")
@@ -570,7 +573,7 @@ def initial_sort(directory, plot=True):
         print("The number of matches:")
         print(number_of_matches)
         print("All possible matches (16weeks, 5days, 6timeslots, 4pithes) - occupied times:")
-        print(16*5*6*4 - 1)
+        print(16*5*6*4 - 35)
 
         print("")
         print("Match avaliability:")
