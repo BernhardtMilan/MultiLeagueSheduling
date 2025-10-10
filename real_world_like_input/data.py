@@ -123,13 +123,13 @@ if __name__ == "__main__":
         for slot in SLOTS:
             print(f"  {slot}: {slot_totals[day][slot]}")
 
-    os.makedirs("../real_world_random_tables", exist_ok=True)
-    os.makedirs("../real_world_optimal_tables", exist_ok=True)
+    os.makedirs("../input_directories/real_world_random_tables", exist_ok=True)
+    os.makedirs("../input_directories/real_world_optimal_tables", exist_ok=True)
 
     leagues_random, schedules_random = convert_output_to_pickle_format(random_output)
-    with open("../real_world_random_tables/processed_data.pkl", "wb") as f:
+    with open("../input_directories/real_world_random_tables/processed_data.pkl", "wb") as f:
         pickle.dump((leagues_random, schedules_random), f)
 
     leagues_optimal, schedules_optimal = convert_output_to_pickle_format(optimal_output)
-    with open("../real_world_optimal_tables/processed_data.pkl", "wb") as f:
+    with open("../input_directories/real_world_optimal_tables/processed_data.pkl", "wb") as f:
         pickle.dump((leagues_optimal, schedules_optimal), f)
