@@ -461,6 +461,8 @@ def evolutionary(draw, team_schedules, possible_max_metric, league_teams, plot):
     team_week_counts_list = [r[1] for r in results]
 
     generations_completed = 0
+    
+    stagnation_counter = 0
 
     # store the problematic teams for targeted mutation
     targeted_teams = []

@@ -11,7 +11,6 @@ target_or_random = 0.7
 #early stopping
 patience = 20000
 min_delta = 0.1
-stagnation_counter = 0
 
 weights = {
     "availability": 4,
