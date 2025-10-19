@@ -4,11 +4,14 @@ import json
 import subprocess
 from pathlib import Path
 import contextlib
+from datetime import datetime
 
 WEEK_GRID = [16]
 #WEEK_GRID = [10, 11, 12, 14, 16]
 
 SELF = Path(__file__).resolve()
+RUNS_DIR = Path("runs")
+RUNS_DIR.mkdir(exist_ok=True)
 
 def compute_once() -> dict:
     """
@@ -19,6 +22,8 @@ def compute_once() -> dict:
     from init import weights
     from evolutionary import evolutionary
     from non_ai_sorts import run_non_ai_sorts
+    from benchmark_adaptive_tabu_search import ATS
+    from benchmark_genetic_alg import pygadBinaryEvo
     from sorsolo import calulate_team_metric
 
     def get_weighted_scores(scores):
@@ -47,11 +52,27 @@ def compute_once() -> dict:
         plot=False
     )
 
+    ats_best_metric, ats_best_draw_structure, ats_best_scores, ats_best_value_counts = ATS(
+        impoved_greedy_draw_data[0],
+        team_schedules,
+        league_teams,
+        plot=False
+    )
+
+    ga_best_metric, ga_best_draw_structure, ga_best_scores, ga_best_value_counts = pygadBinaryEvo(
+        impoved_greedy_draw_data[0],
+        team_schedules,
+        league_teams,
+        plot=False
+    )
+
     METHODS_AND_STRUCTS = [
         ("RANDOM",           random_draw_data[0]),
         ("GREEDY",           greedy_draw_data[0]),
         ("IMPROVED GREEDY",  impoved_greedy_draw_data[0]),
         ("EVOLUTIONARY",     evo_best_draw_structure),
+        ("ATS",              ats_best_draw_structure),
+        ("GA",               ga_best_draw_structure),
     ]
 
     for method, draw_structure in METHODS_AND_STRUCTS:
@@ -65,16 +86,22 @@ def compute_once() -> dict:
         "greedy_metric": float(greedy_draw_data[1]),
         "improved_greedy_metric": float(impoved_greedy_draw_data[1]),
         "evo_best_metric": float(evo_best_metric),
+        "ats_best_metric": float(ats_best_metric),
+        "ga_best_metric": float(ga_best_metric),
 
         "random_scores_weighted":   get_weighted_scores(list(random_draw_data[2])),
         "greedy_scores_weighted":   get_weighted_scores(list(greedy_draw_data[2])),
         "improved_scores_weighted": get_weighted_scores(list(impoved_greedy_draw_data[2])),
         "evo_scores_weighted":      get_weighted_scores(list(evo_best_scores)),
+        "ats_scores_weighted":      get_weighted_scores(list(ats_best_scores)),
+        "ga_scores_weighted":       get_weighted_scores(list(ga_best_scores)),
 
         "random_value_counts":   list(random_draw_data[3]),
         "greedy_value_counts":   list(greedy_draw_data[3]),
         "improved_value_counts": list(impoved_greedy_draw_data[3]),
         "evo_value_counts":      list(evo_best_value_counts),
+        "ats_value_counts":      list(ats_best_value_counts),
+        "ga_value_counts":       list(ga_best_value_counts),
     }
 
 def print_human(res: dict):
@@ -82,19 +109,25 @@ def print_human(res: dict):
     print(f"Random: {res['random_metric']}")
     print(f"Greedy: {res['greedy_metric']}")
     print(f"Improved Greedy: {res['improved_greedy_metric']}")
-    print(f"Evolutionary: {res['evo_best_metric']}\n")
+    print(f"Evolutionary: {res['evo_best_metric']}")
+    print(f"ATS: {res['ats_best_metric']}")
+    print(f"GA: {res['ga_best_metric']}\n")
     print("Scores:")
     print("[total_availability_score, bunching_penalty, idle_gap_penalty, spread_reward, L1_pitch_penalty]")
     print(res["random_scores_weighted"])
     print(res["greedy_scores_weighted"])
     print(res["improved_scores_weighted"])
     print(res["evo_scores_weighted"])
+    print(res["ats_scores_weighted"])
+    print(res["ga_scores_weighted"])
     print("\nMatch availability:")
     print("[bad, no answer, might, good]")
     print(res["random_value_counts"])
     print(res["greedy_value_counts"])
     print(res["improved_value_counts"])
     print(res["evo_value_counts"])
+    print(res["ats_value_counts"])
+    print(res["ga_value_counts"])
 
 def run_child_with_weeks(weeks: int) -> dict:
     """
@@ -172,103 +205,6 @@ def run_child_with_weeks(weeks: int) -> dict:
             f"See streamed logs above. Raw stdout was:\n{out[:500]}"
         )
 
-def plot_methods_over_weeks(
-    rows,
-    outfile="metrics_by_weeks.png",
-    show=True,
-    annotate=True,
-    band_half_factor=0.125  # subtle per-week shading width
-):
-    """
-    Minimal, readable plot:
-      - X = weeks, Y = metric
-      - Lines = Improved Greedy, Evolutionary
-      - Light gray shading between them (behind lines), width controlled by band_half_factor
-      - Optional ratio/delta labels, with per-week manual placement via label_overrides:
-          where: "right" | "left" | "top-right" | "top-left" | "bottom-right" | "bottom-left"
-          dx: horizontal nudge in X units (e.g., 0.25 ~ a quarter of a week step)
-          dy_frac: vertical nudge as a fraction of Y range (e.g., 0.02 = 2% of y-range)
-    """
-    import matplotlib.pyplot as plt
-
-    weeks   = [r["weeks"]    for r in rows]
-    improved= [r["improved"] for r in rows]
-    evo     = [r["evo"]      for r in rows]
-
-    fig, ax = plt.subplots(figsize=(9, 5))
-
-    
-    evo_line, = ax.plot(weeks, evo,       marker='o', linewidth=2, label="Evolutionary",   zorder=3)
-    imp_line, = ax.plot(weeks, improved, marker='o', linewidth=2, label="Improved Greedy", zorder=3)
-
-    # --- shaded gap width (narrow, subtle) ---
-    if len(weeks) >= 2:
-        step_min  = min(abs(b - a) for a, b in zip(weeks[:-1], weeks[1:]))
-        band_half = band_half_factor * step_min
-    else:
-        band_half = 0.3 * band_half_factor / 0.125  # reasonable default
-
-    # Minimal neutral gray shading behind lines
-    band_color = "0.6"   # mid gray
-    band_alpha = 0.12    # low opacity so it doesn't dominate
-
-    y_all   = improved + evo
-    y_min   = min(y_all)
-    y_max   = max(y_all)
-    y_range = max(1e-9, y_max - y_min)
-    # a bit of headroom for labels
-    top_pad = 0.12
-    ax.set_ylim(y_min - 0.05*y_range, y_max + 0.12*y_range)
-
-    # Draw shaded gaps
-    for x, y_imp, y_evo in zip(weeks, improved, evo):
-        y_low, y_high = sorted((y_imp, y_evo))
-        ax.fill_between([x - band_half, x + band_half], y_low, y_high,
-                        color=band_color, alpha=band_alpha, zorder=1)
-
-    # Labels just above Evo points
-    if annotate:
-        UMINUS = "−"  # nicer minus
-        for x, y_imp, y_evo in zip(weeks, improved, evo):
-            ratio = (y_imp / y_evo * 100.0) if y_evo != 0 else float("nan")
-            delta = y_imp - y_evo
-            label = f"{ratio:.2f}% ({UMINUS}{abs(delta):.1f})" if delta < 0 else f"{ratio:.2f}% (+{delta:.1f})"
-
-            # Anchor to Improved (lower) and place just above it
-            x_lab = x
-            y_lab = y_imp + 0.03 * y_range
-
-            ax.text(
-                x_lab, y_lab, label,
-                ha="center", va="bottom", fontsize=9, color="0.15",
-                bbox=dict(
-                    boxstyle="round,pad=0.15",
-                    facecolor="0.90",   # light gray pill
-                    edgecolor="0.75",
-                    alpha=0.90          # 90% opaque for readability over lines
-                ),
-                zorder=5
-            )
-
-    ax.set_title("Scheduling Metric by the number of Weeks (Improved Greedy vs Evolutionary)")
-    ax.set_xlabel("Turnament length in weeks")
-    ax.set_ylabel("Metric score")
-    ax.grid(axis='y', linestyle='--', alpha=0.3)
-    ax.legend()
-    fig.tight_layout()
-
-    try:
-        fig.savefig(outfile, dpi=200)
-        print(f"\nSaved chart to: {outfile}")
-    except Exception as e:
-        print(f"Warning: failed to save chart: {e}")
-
-    if show:
-        try:
-            plt.show()
-        except Exception:
-            pass
-
 def main():
     # CHILD MODE: compute once, print clean JSON ONLY to stdout.
     if "--child" in sys.argv:
@@ -282,32 +218,41 @@ def main():
         print("WEEK_GRID is empty. Edit WEEK_GRID at the top of this file.")
         sys.exit(1)
 
-    rows = []
+    datasets = []
     for w in WEEK_GRID:
         print(f"\n=== Launching week {w} ===", flush=True)
         res = run_child_with_weeks(w)
-        rows.append({
-            "weeks": w,
-            "random":   res["random_metric"],
-            "greedy":   res["greedy_metric"],
-            "improved": res["improved_greedy_metric"],
-            "evo":      res["evo_best_metric"],
-        })
+        # label like metrics_by_dataset.json does ("dataset": <name>)
+        labeled = dict(res)
+        labeled["dataset"] = f"week_{w}"
+        datasets.append(labeled)
 
-    print("weeks\trandom\t\tgreedy\t\timproved\t\tevo")
-    for r in rows:
-        print(f'{r["weeks"]}\t{r["random"]:.4f}\t{r["greedy"]:.4f}\t{r["improved"]:.4f}\t{r["evo"]:.4f}')
+    # Console summary (still helpful)
+    print("\nweeks\trandom\t\tgreedy\t\timproved\t\tevo\t\tats\t\tga")
+    for w, r in zip(WEEK_GRID, datasets):
+        print(f'{w}\t{r["random_metric"]:.4f}\t{r["greedy_metric"]:.4f}\t{r["improved_greedy_metric"]:.4f}\t'
+              f'{r["evo_best_metric"]:.4f}\t{r["ats_best_metric"]:.4f}\t{r["ga_best_metric"]:.4f}')
 
-    # Plot with non-overlapping labels
-    outfile = "metrics_by_weeks.png" if len(rows) > 1 else f"metrics_week_{rows[0]['weeks']}.png"
+    # Build aggregate bundle (same spirit as metrics_by_dataset.json)
+    bundle = {
+        "schema_version": 1,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "weeks_grid": list(WEEK_GRID),     # list of weeks included
+        "datasets": datasets,              # one entry per week (labeled as "dataset": "week_X")
+        # helpful legends (kept the same)
+        "score_fields": [
+            "availability_weighted",
+            "match_bunching_penalty_weighted",
+            "idle_gap_penalty_weighted",
+            "spread_reward_weighted",
+            "L1_pitch_penalty_weighted",
+        ],
+        "availability_buckets": ["bad", "no_answer", "might", "good"],
+    }
 
-    plot_methods_over_weeks(
-        rows,
-        outfile=("metrics_by_weeks.png" if len(rows) > 1 else f"metrics_week_{rows[0]['weeks']}.png"),
-        show=True,
-        annotate=True,
-        band_half_factor=0.125
-    )
+    out_path = RUNS_DIR / "metrics_by_weeks.json"
+    out_path.write_text(json.dumps(bundle, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"\nSaved full JSON to: {out_path.resolve()}")
 
 if __name__ == "__main__":
     main()

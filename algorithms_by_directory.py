@@ -9,11 +9,11 @@ from datetime import datetime
 
 # Choose which datasets to compare (keys from init.DIR_CHOICES)
 DATASET_GRID = [
-    "fully_random",
+    #"fully_random",
     # "old",
     "real_world_like",
-    "optimal",
-    "real_world_like_optimal",
+    #"optimal",
+    #"real_world_like_optimal",
 ]
 
 SELF = Path(__file__).resolve()
@@ -26,6 +26,8 @@ def compute_once() -> dict:
     from init import weights  # delay import so env is read at import-time
     from evolutionary import evolutionary
     from non_ai_sorts import run_non_ai_sorts
+    from benchmark_adaptive_tabu_search import ATS
+    from benchmark_genetic_alg import pygadBinaryEvo
 
     def get_weighted_scores(scores):
         return [
@@ -53,24 +55,45 @@ def compute_once() -> dict:
         plot=False
     )
 
+    ats_best_metric, ats_best_draw_structure, ats_best_scores, ats_best_value_counts = ATS(
+        impoved_greedy_draw_data[0],
+        team_schedules,
+        league_teams,
+        plot=False
+    )
+
+    ga_best_metric, ga_best_draw_structure, ga_best_scores, ga_best_value_counts = pygadBinaryEvo(
+        impoved_greedy_draw_data[0],
+        team_schedules,
+        league_teams,
+        plot=False
+    )
+
+
     return {
         # headline metrics
         "random_metric": float(random_draw_data[1]),
         "greedy_metric": float(greedy_draw_data[1]),
         "improved_greedy_metric": float(impoved_greedy_draw_data[1]),
         "evo_best_metric": float(evo_best_metric),
+        "ats_best_metric": float(ats_best_metric),
+        "ga_best_metric": float(ga_best_metric),
 
         # weighted component scores (same order as your printout)
         "random_scores_weighted":   list(get_weighted_scores(list(random_draw_data[2]))),
         "greedy_scores_weighted":   list(get_weighted_scores(list(greedy_draw_data[2]))),
         "improved_scores_weighted": list(get_weighted_scores(list(impoved_greedy_draw_data[2]))),
         "evo_scores_weighted":      list(get_weighted_scores(list(evo_best_scores))),
+        "ats_scores_weighted":      get_weighted_scores(list(ats_best_scores)),
+        "ga_scores_weighted":       get_weighted_scores(list(ga_best_scores)),
 
         # availability buckets [bad, no answer, might, good]
         "random_value_counts":   list(random_draw_data[3]),
         "greedy_value_counts":   list(greedy_draw_data[3]),
         "improved_value_counts": list(impoved_greedy_draw_data[3]),
         "evo_value_counts":      list(evo_best_value_counts),
+        "ats_value_counts":      list(ats_best_value_counts),
+        "ga_value_counts":       list(ga_best_value_counts),
     }
 
 def run_child_with_dataset(dataset_key: str) -> dict:
@@ -162,7 +185,7 @@ def main():
     # Build one JSON bundle
     out_dir = Path("runs")
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "metrics_by_dataset.json"
+    out_path = out_dir / "metrics_by_directory.json"
 
     bundle = {
         "schema_version": 1,
