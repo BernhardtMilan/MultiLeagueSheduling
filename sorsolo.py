@@ -247,6 +247,46 @@ def sort_random_matches(draw_structure, leagues_all_games):
                         
     return draw_structure
 
+def calulate_team_metric(draw_structure, team_schedules, league_teams):
+
+    data = defaultdict(lambda: {
+        "availability": 0,
+        "match_bunching_penalty": 0,
+        "idle_gap_penalty": 0,
+        "spread_reward": 0
+    })
+
+    matches = flatten_matches(draw_structure)
+    team_week_counts = defaultdict(lambda: [0] * number_of_weeks)
+
+    for week_idx, day_key, timeslot_key, pitch, (team1, team2) in matches:
+        day_idx  = DAY_INDEX[day_key]
+        slot_idx = SLOT_INDEX[timeslot_key]
+
+        for team in (team1, team2):
+            data[team]["availability"] += int(team_schedules[team][day_idx, slot_idx])
+            team_week_counts[team][week_idx - 1] += 1
+        
+    for team, counts in team_week_counts.items():
+        # bunching: playing more than once in a week
+        data[team]["match_bunching_penalty"] = sum((c - 1) for c in counts if c > 1)
+
+        # spread + idle gaps
+        weeks_played = [i for i, c in enumerate(counts) if c > 0]
+        data[team]["spread_reward"] = len(weeks_played)
+
+        if len(weeks_played) > 1:
+            gaps = [weeks_played[i+1] - weeks_played[i] - 1 for i in range(len(weeks_played)-1)]
+            # penalize gaps of 2+ idle weeks (same rule as your global metric)
+            data[team]["idle_gap_penalty"] = sum(1 for g in gaps if g >= 2)
+
+        data[team]["availability"] *= weights["availability"]
+        data[team]["match_bunching_penalty"] *= weights["match_bunching_penalty"]
+        data[team]["idle_gap_penalty"] *= weights["idle_gap_penalty"]
+        data[team]["spread_reward"] *= weights["spread_reward"]
+
+    return dict(data)
+
 def flatten_matches(draw_structure):
     matches = []
     for week_idx, week in enumerate(draw_structure.values(), start=1):
