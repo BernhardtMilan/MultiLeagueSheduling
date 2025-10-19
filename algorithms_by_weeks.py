@@ -5,8 +5,8 @@ import subprocess
 from pathlib import Path
 import contextlib
 
-# WEEK_GRID = [16]
-WEEK_GRID = [10, 11, 12, 14, 16]
+WEEK_GRID = [16]
+#WEEK_GRID = [10, 11, 12, 14, 16]
 
 SELF = Path(__file__).resolve()
 
@@ -19,6 +19,7 @@ def compute_once() -> dict:
     from init import weights
     from evolutionary import evolutionary
     from non_ai_sorts import run_non_ai_sorts
+    from sorsolo import calulate_team_metric
 
     def get_weighted_scores(scores):
         return [
@@ -38,13 +39,26 @@ def compute_once() -> dict:
         impoved_greedy_draw_data,
     ) = run_non_ai_sorts()
 
-    evo_best_metric, _, evo_best_scores, evo_best_value_counts = evolutionary(
+    evo_best_metric, evo_best_draw_structure, evo_best_scores, evo_best_value_counts = evolutionary(
         impoved_greedy_draw_data[0],
         team_schedules,
         possible_max_metric,
         league_teams,
         plot=False
     )
+
+    METHODS_AND_STRUCTS = [
+        ("RANDOM",           random_draw_data[0]),
+        ("GREEDY",           greedy_draw_data[0]),
+        ("IMPROVED GREEDY",  impoved_greedy_draw_data[0]),
+        ("EVOLUTIONARY",     evo_best_draw_structure),
+    ]
+
+    for method, draw_structure in METHODS_AND_STRUCTS:
+        per_team_metric = calulate_team_metric(draw_structure, team_schedules, league_teams)
+        out_path = os.path.join("runs", f"per_team_metric_{method}.json")
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(per_team_metric, f, indent=2, ensure_ascii=False)
 
     return {
         "random_metric": float(random_draw_data[1]),
