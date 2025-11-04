@@ -12,14 +12,14 @@ pitches = [1, 2, 3, 4]
 
 best_metrics = []
 
-def fancy_log(generation, metric, prev_metric, max_metric, time_elapsed):
+def fancy_log(generation, metric, prev_metric, max_metric, time_elapsed, start_time):
     gain = metric - prev_metric
     percent = (metric / max_metric) * 100 if max_metric else 0
 
     progress.desc = f"Gen {generation:3d} | Best: {metric:.1f} ({gain:+.1f}) - {max_metric:.0f}({percent:.1f}%) | {time_elapsed:.2f}s"
     progress.update(10)
     if generation % 100 == 0:
-        print(f"\nGeneration {generation:3d} | Best Metric: {metric:.1f}")
+        print(f"\nGeneration {generation:3d} | Best Metric: {metric:.1f} | {time()-start_time:.2f}s")
 
 def random_match_changes(draw_structure):
     mutated_draw = draw_structure
@@ -473,6 +473,7 @@ def evolutionary(draw, team_schedules, possible_max_metric, league_teams, plot):
     extra_mutations = (POPULATION_SIZE - SURVIVORS) % SURVIVORS
 
     start_time_10gen = time()
+    start_time = time()
 
     for generation in range(1, GENERATIONS + 1):
         # Evaluate all current draws
@@ -513,7 +514,7 @@ def evolutionary(draw, team_schedules, possible_max_metric, league_teams, plot):
             elapsed = time() - start_time_10gen
             start_time_10gen = time()  # Reset timer for next 10
             if len(best_metrics) > 10:
-                fancy_log(generation, current_best_metric, best_metrics[-11], possible_max_metric, elapsed)
+                fancy_log(generation, current_best_metric, best_metrics[-11], possible_max_metric, elapsed, start_time)
             else: # IF there is no previous generation to compare to
                 progress.update(10)
 
@@ -583,6 +584,9 @@ def evolutionary(draw, team_schedules, possible_max_metric, league_teams, plot):
     print(best_value_counts)
     print("[bad, no answer, might, good]")
 
+    time_elapsed = time() - start_time
+    print(f"\nTotal time: {time_elapsed:.2f}s")
+
     if plot:
 
         plt.figure(figsize=(8, 5))
@@ -603,8 +607,8 @@ def evolutionary(draw, team_schedules, possible_max_metric, league_teams, plot):
         plt.tight_layout()
         plt.show()
 
-    return best_metric, best_draw, best_scores, best_value_counts
+    return best_metric, best_draw, best_scores, best_value_counts, time_elapsed
 
 if __name__ == "__main__":
     draw, team_schedules, possible_max_metric, league_teams = initial_sort(directory, plot=False)
-    _, _, _, _ = evolutionary(draw, team_schedules, possible_max_metric, league_teams, plot=True)
+    _, _, _, _, _ = evolutionary(draw, team_schedules, possible_max_metric, league_teams, plot=True)

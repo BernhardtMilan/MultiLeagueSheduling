@@ -1,4 +1,3 @@
-# run_by_dataset_save_json.py
 import os
 import sys
 import json
@@ -7,7 +6,6 @@ from pathlib import Path
 import contextlib
 from datetime import datetime
 
-# Choose which datasets to compare (keys from init.DIR_CHOICES)
 DATASET_GRID = [
     #"fully_random",
     # "old",
@@ -23,7 +21,7 @@ def compute_once() -> dict:
     Runs one full experiment for the CURRENT process using SORSOLO_DATASET
     (and SORSOLO_WEEKS if set), returns a rich dict of metrics & breakdowns.
     """
-    from init import weights  # delay import so env is read at import-time
+    from init import weights
     from evolutionary import evolutionary
     from non_ai_sorts import run_non_ai_sorts
     from benchmark_adaptive_tabu_search import ATS
@@ -47,7 +45,7 @@ def compute_once() -> dict:
         impoved_greedy_draw_data,
     ) = run_non_ai_sorts()
 
-    evo_best_metric, _, evo_best_scores, evo_best_value_counts = evolutionary(
+    evo_best_metric, evo_best_draw_structure, evo_best_scores, evo_best_value_counts, evo_time_elapsed = evolutionary(
         impoved_greedy_draw_data[0],
         team_schedules,
         possible_max_metric,
@@ -55,14 +53,14 @@ def compute_once() -> dict:
         plot=False
     )
 
-    ats_best_metric, ats_best_draw_structure, ats_best_scores, ats_best_value_counts = ATS(
+    ats_best_metric, ats_best_draw_structure, ats_best_scores, ats_best_value_counts, ats_time_elapsed = ATS(
         impoved_greedy_draw_data[0],
         team_schedules,
         league_teams,
         plot=False
     )
 
-    ga_best_metric, ga_best_draw_structure, ga_best_scores, ga_best_value_counts = pygadBinaryEvo(
+    ga_best_metric, ga_best_draw_structure, ga_best_scores, ga_best_value_counts, ga_time_elapsed = pygadBinaryEvo(
         impoved_greedy_draw_data[0],
         team_schedules,
         league_teams,
@@ -94,6 +92,10 @@ def compute_once() -> dict:
         "evo_value_counts":      list(evo_best_value_counts),
         "ats_value_counts":      list(ats_best_value_counts),
         "ga_value_counts":       list(ga_best_value_counts),
+
+        "evo_time_elapsed": evo_time_elapsed,
+        "ats_time_elapsed": ats_time_elapsed,
+        "ga_time_elapsed": ga_time_elapsed,
     }
 
 def run_child_with_dataset(dataset_key: str) -> dict:

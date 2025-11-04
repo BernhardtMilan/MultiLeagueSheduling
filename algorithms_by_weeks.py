@@ -44,23 +44,23 @@ def compute_once() -> dict:
         impoved_greedy_draw_data,
     ) = run_non_ai_sorts()
 
-    evo_best_metric, evo_best_draw_structure, evo_best_scores, evo_best_value_counts = evolutionary(
-        impoved_greedy_draw_data[0],
+    evo_best_metric, evo_best_draw_structure, evo_best_scores, evo_best_value_counts, evo_time_elapsed = evolutionary(
+        random_draw_data[0],
         team_schedules,
         possible_max_metric,
         league_teams,
         plot=False
     )
 
-    ats_best_metric, ats_best_draw_structure, ats_best_scores, ats_best_value_counts = ATS(
-        impoved_greedy_draw_data[0],
+    ats_best_metric, ats_best_draw_structure, ats_best_scores, ats_best_value_counts, ats_time_elapsed = ATS(
+        random_draw_data[0],
         team_schedules,
         league_teams,
         plot=False
     )
 
-    ga_best_metric, ga_best_draw_structure, ga_best_scores, ga_best_value_counts = pygadBinaryEvo(
-        impoved_greedy_draw_data[0],
+    ga_best_metric, ga_best_draw_structure, ga_best_scores, ga_best_value_counts, ga_time_elapsed = pygadBinaryEvo(
+        random_draw_data[0],
         team_schedules,
         league_teams,
         plot=False
@@ -102,6 +102,10 @@ def compute_once() -> dict:
         "evo_value_counts":      list(evo_best_value_counts),
         "ats_value_counts":      list(ats_best_value_counts),
         "ga_value_counts":       list(ga_best_value_counts),
+
+        "evo_time_elapsed": evo_time_elapsed,
+        "ats_time_elapsed": ats_time_elapsed,
+        "ga_time_elapsed": ga_time_elapsed,
     }
 
 def print_human(res: dict):

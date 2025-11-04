@@ -19,6 +19,7 @@ from league_devider import devide_leagues
 
 DAY_INDEX = {day: i for i, day in enumerate(days_of_week)}
 SLOT_INDEX = {slot: i for i, slot in enumerate(time_slots)}
+WEEK_INDEX = {w: i for i, w in enumerate(weeks)}
 
 def initialize_empty_draw_structure():
     """
@@ -253,7 +254,8 @@ def calulate_team_metric(draw_structure, team_schedules, league_teams):
         "availability": 0,
         "match_bunching_penalty": 0,
         "idle_gap_penalty": 0,
-        "spread_reward": 0
+        "spread_reward": 0,
+        "number_of_matches": 0
     })
 
     matches = flatten_matches(draw_structure)
@@ -265,6 +267,7 @@ def calulate_team_metric(draw_structure, team_schedules, league_teams):
 
         for team in (team1, team2):
             data[team]["availability"] += int(team_schedules[team][day_idx, slot_idx])
+            data[team]["number_of_matches"] += 1
             team_week_counts[team][week_idx - 1] += 1
         
     for team, counts in team_week_counts.items():
