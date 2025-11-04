@@ -12,6 +12,69 @@ datasets = [d["dataset"] for d in data["datasets"]]
 n = len(datasets)
 x = np.arange(n)
 
+def print_summary_table(ds):
+    # Map algorithms -> (total_metric_field, component_array_field)
+    cols = [
+        ("Greedy",          "greedy_metric",          "greedy_scores_weighted"),
+        ("ImprovedGreedy",  "improved_greedy_metric", "improved_scores_weighted"),
+        ("Mine",            "evo_best_metric",        "evo_scores_weighted"),  # "Mine" = your Evo
+        ("ATS",             "ats_best_metric",        "ats_scores_weighted"),
+        ("GA",              "ga_best_metric",         "ga_scores_weighted"),
+    ]
+
+    # Build rows
+    headers = [c[0] for c in cols]
+    total_vals = [ds[c[1]] for c in cols]
+    comp_vals = [ds[c[2]] for c in cols]  # arrays: [availability, bunching, gaps, spread, L1]
+
+    rows = [
+        ("Total metric", total_vals),
+        ("Availability", [v[0] for v in comp_vals]),
+        ("Bunching",     [v[1] for v in comp_vals]),
+        ("Gaps",         [v[2] for v in comp_vals]),
+        ("Spread",       [v[3] for v in comp_vals]),
+        ("L1 pitch",     [v[4] for v in comp_vals]),
+    ]
+
+    # Helpers for formatting
+    def best_index(values):
+        # Higher is better for all these rows (penalties are negative, so "closest to 0" = max)
+        return int(max(range(len(values)), key=lambda i: values[i]))
+
+    def fmt_num(x):
+        # The JSON mixes ints/floats; show as int when close, otherwise 1 decimal
+        return f"{int(round(x))}" if abs(x - round(x)) < 1e-6 else f"{x:.1f}"
+
+    # Column widths
+    name_w = 12
+    col_w = 14
+
+    # Header
+    print()
+    title = f"Dataset: {ds.get('dataset','(unknown)')}"
+    print(title)
+    print("-" * (name_w + col_w*len(headers)))
+    print(f"{'Metric':<{name_w}}", end="")
+    for h in headers:
+        print(f"{h:>{col_w}}", end="")
+    print()
+
+    # Body (bold-like marker • on the best value per row)
+    for rname, vals in rows:
+        b = best_index(vals)
+        print(f"{rname:<{name_w}}", end="")
+        for i, v in enumerate(vals):
+            s = fmt_num(v)
+            # Mark best with a centered dot; easy to spot in mono output
+            s = f"{s} •" if i == b else s
+            print(f"{s:>{col_w}}", end="")
+        print()
+    print("-" * (name_w + col_w*len(headers)))
+    print()
+
+for ds in data["datasets"]:
+    print_summary_table(ds)
+
 # ---- Figure 1: Overall metrics per dataset (grouped bars) ----
 greedy_metrics   = [d["greedy_metric"] for d in data["datasets"]]
 improv_metrics   = [d["improved_greedy_metric"] for d in data["datasets"]]
