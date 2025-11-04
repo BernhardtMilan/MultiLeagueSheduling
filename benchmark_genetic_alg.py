@@ -1,44 +1,34 @@
-# file: pygad_binary_evo.py
-import copy
 import random
 import numpy as np
 import pygad
-from collections import defaultdict
+from time import time
 
 from init import *
-from sorsolo import flatten_matches, calculate_metric, calculate_final_metric, generate_output, initial_sort, DAY_INDEX, SLOT_INDEX
+from sorsolo import flatten_matches, calculate_metric, calculate_final_metric, initial_sort, WEEK_INDEX, DAY_INDEX, SLOT_INDEX
 from non_ai_sorts import run_non_ai_sorts
 
-# ----------------------------
-# Helpers: slot <-> (w,d,t,p)
-# ----------------------------
-
-N_WEEKS = number_of_weeks                    # from init
-N_DAYS  = 5
-N_SLOTS = 6
-N_PITCH = 4
-
-SLOTS_PER_WEEK = N_DAYS * N_SLOTS * N_PITCH
-TOTAL_SLOTS    = N_WEEKS * SLOTS_PER_WEEK
-
-W_IDX = {w: i for i, w in enumerate(weeks)}      # length == N_WEEKS
-D_IDX = {d: i for i, d in enumerate(days_of_week)}
-T_IDX = {t: i for i, t in enumerate(time_slots)}
+SLOTS_PER_WEEK = 5 * 6 * 4
+TOTAL_SLOTS = number_of_weeks * SLOTS_PER_WEEK
 
 def slot_id_from_tuple(w_key, d_key, t_key, pitch_int):
-    w = W_IDX[w_key]
-    d = D_IDX[d_key]
-    t = T_IDX[t_key]
-    p = pitch_int - 1  # pitches are 1..4 in your draw
-
-    # ((((w)*N_DAYS + d)*N_SLOTS + t)*N_PITCH + p)
-    return (((w * N_DAYS) + d) * N_SLOTS + t) * N_PITCH + p
+    """
+    Convert (week, day, time, pitch) -> flattened slot_id.
+    Uses global DAY_INDEX and SLOT_INDEX from sorsolo.py.
+    """
+    w = WEEK_INDEX[w_key]
+    d = DAY_INDEX[d_key]
+    t = SLOT_INDEX[t_key]
+    p = pitch_int - 1  # pitches are 1..4
+    return (((w * 5) + d) * 6 + t) * 4 + p
 
 def slot_tuple_from_id(slot_id):
-    p = slot_id % N_PITCH; slot_id //= N_PITCH
-    t = slot_id % N_SLOTS; slot_id //= N_SLOTS
-    d = slot_id % N_DAYS;  slot_id //= N_DAYS
-    w = slot_id  # 0..N_WEEKS-1
+    p = slot_id % 4
+    slot_id //= 4
+    t = slot_id % 6
+    slot_id //= 6
+    d = slot_id % 5
+    slot_id //= 5
+    w = slot_id  # 0..number_of_weeks-1
 
     w_key = weeks[w]
     d_key = days_of_week[d]
@@ -47,7 +37,6 @@ def slot_tuple_from_id(slot_id):
     return w_key, d_key, t_key, pitch_int
 
 def empty_like_draw(draw):
-    """Deep copy structure but clear matches, keep OCCUPIED TIMESLOT strings as-is."""
     out = {}
     for w, day_map in draw.items():
         out[w] = {}
@@ -56,10 +45,7 @@ def empty_like_draw(draw):
             for t, pitch_map in time_map.items():
                 out[w][d][t] = {}
                 for p, content in pitch_map.items():
-                    if content == "OCCUPIED TIMESLOT":
-                        out[w][d][t][p] = "OCCUPIED TIMESLOT"
-                    else:
-                        out[w][d][t][p] = ""  # make empty
+                    out[w][d][t][p] = "OCCUPIED TIMESLOT" if content == "OCCUPIED TIMESLOT" else ""
     return out
 
 def get_locked_slots(draw):
@@ -72,18 +58,9 @@ def get_locked_slots(draw):
                         locked.add(slot_id_from_tuple(w, d, t, p))
     return locked
 
-# -----------------------------------
-# Encoding: build fixed match ordering
-# -----------------------------------
+# Encoding:
 def enumerate_matches_with_occurrence(draw):
-    """
-    Returns:
-      match_keys: list of unique match keys (team1, team2, occ_idx) in fixed order
-      match_to_slotid: dict key -> slot_id from the given draw
-    """
     matches = flatten_matches(draw)  # [(week_idx, day_key, timeslot_key, pitch, (team1,team2)), ...]
-    # NOTE: flatten_matches gives week_idx as 1-based; we convert back to w_key
-    # We’ll rebuild w_key from weeks list.
     occ_counter = {}
     match_keys = []
     match_to_slotid = {}
@@ -92,7 +69,7 @@ def enumerate_matches_with_occurrence(draw):
         pair = (team1, team2)
         occ = occ_counter.get(pair, 0)
         occ_counter[pair] = occ + 1
-        key = (team1, team2, occ)  # occurrence-disambiguated
+        key = (team1, team2, occ)
         match_keys.append(key)
 
         w_key = weeks[week_idx - 1]
@@ -106,26 +83,19 @@ def encode_draw_to_chromosome(draw):
     chromosome = np.array([match_to_slotid[k] for k in match_keys], dtype=np.int32)
     return match_keys, chromosome
 
-# -----------------------------------
-# Decoding with simple feasibility repair
-# -----------------------------------
+# Decoding
 def decode_chromosome_to_draw(template_draw, match_keys, chromosome, locked_slots):
-    """
-    Places each match key into its slot. If a slot is locked or already used, do a simple linear-probe
-    to the next available allowed slot (wrap-around). This is a light repair so we always return a draw.
-    """
     draw = empty_like_draw(template_draw)
     used = set(locked_slots)
 
     for gene_idx, key in enumerate(match_keys):
         sid = int(chromosome[gene_idx])
-
         original_sid = sid
         tries = 0
         while sid in used or sid in locked_slots:
-            sid = (sid + 1) % TOTAL_SLOTS     # <-- was 1920
+            sid = (sid + 1) % TOTAL_SLOTS
             tries += 1
-            if tries > TOTAL_SLOTS + 1:       # <-- was 1921
+            if tries > TOTAL_SLOTS + 1:
                 sid = original_sid
                 break
 
@@ -136,227 +106,179 @@ def decode_chromosome_to_draw(template_draw, match_keys, chromosome, locked_slot
 
     return draw
 
+def _precompute_slot_meta():
+    """Precompute (week, day_idx, slot_idx, pitch_int) for every slot_id."""
+    arr = np.arange(TOTAL_SLOTS, dtype=np.int32)
+    w = arr // SLOTS_PER_WEEK
+    r = arr % SLOTS_PER_WEEK
+    d = r // (6 * 4)
+    r2 = r % (6 * 4)
+    t = r2 // 4
+    p = (r2 % 4) + 1  # pitch 1..4
+    return w.astype(np.int16), d.astype(np.int8), t.astype(np.int8), p.astype(np.int8)
 
-def calculate_metric_paper_style(draw_structure, team_schedules, league_teams):
+SLOT_WEEK, SLOT_DAY_IDX, SLOT_SLOT_IDX, SLOT_PITCH = _precompute_slot_meta()
+
+def _count_violations_on_chromosome(solution, teams1_idx, teams2_idx, L1_mask, avail_by_team_day_slot):
     """
-    Returns:
-      fitness_scalar: float in (0, 1], larger is better
-      team_week_counts: dict(team -> [count per week]), to keep downstream compatibility
-    Rules:
-      - If either team has availability == -2 at its assigned (day,slot) -> hard += 1
-      - If both teams have availability == 2 -> no availability penalty
-      - Else (any of -1, 0, +1 on either side) -> soft += 1
-      - Other schedule quality terms are counted as SOFT violations:
-          * bunching_penalty (extra matches in a week per team)
-          * idle_gap_penalty (gaps >= 2 weeks between appearances)
-          * L1_pitch_penalty (L1 not on pitch 1)
-    Fitness:
-      fitness = 1.0 / (1.0 + hard_violations + soft_violations)
+    Returns: hard, soft_av, bunching, idle_gap, l1_pitch, soft_total
     """
-    team_week_counts = defaultdict(lambda: [0] * number_of_weeks)
+    w = SLOT_WEEK[solution]
+    d = SLOT_DAY_IDX[solution]
+    s = SLOT_SLOT_IDX[solution]
+    p = SLOT_PITCH[solution]
 
-    matches = flatten_matches(draw_structure)
-    L1_teams = set(league_teams["L1"])
+    a1 = avail_by_team_day_slot[teams1_idx, d, s]
+    a2 = avail_by_team_day_slot[teams2_idx, d, s]
 
-    hard_violations = 0
-    soft_violations = 0
+    hard_mask = (a1 == -2) | (a2 == -2)
+    hard = int(np.sum(hard_mask))
+    perfect = (a1 == 2) & (a2 == 2)
+    soft_av = int(np.sum(~hard_mask & ~perfect))
 
-    # availability-derived penalties
-    soft_availability = 0
-    l1_pitch_penalty = 0
+    l1_any = L1_mask[teams1_idx] | L1_mask[teams2_idx]
+    l1_pitch = int(np.sum(l1_any & (p != 1)))
 
-    for week_idx, day_key, timeslot_key, pitch, (team1, team2) in matches:
-        day_idx = DAY_INDEX[day_key]
-        slot_idx = SLOT_INDEX[timeslot_key]
+    T = L1_mask.shape[0]
+    week_counts = np.zeros((T, number_of_weeks), dtype=np.int16)
+    np.add.at(week_counts, (teams1_idx, w), 1)
+    np.add.at(week_counts, (teams2_idx, w), 1)
 
-        a1 = team_schedules[team1][day_idx, slot_idx]
-        a2 = team_schedules[team2][day_idx, slot_idx]
+    over1 = week_counts - 1
+    over1[over1 < 0] = 0
+    bunching = int(over1.sum())
 
-        # Availability to hard/soft according to your rule
-        if a1 == -2 or a2 == -2:
-            hard_violations += 1
-        else:
-            # both are perfect -> no penalty
-            if not (a1 == 2 and a2 == 2):
-                soft_availability += 1  # any of (-1, 0, +1) present
-
-        # L1 pitch soft penalty
-        if team1 in L1_teams and pitch != 1:
-            l1_pitch_penalty += 1
-        if team2 in L1_teams and pitch != 1:
-            l1_pitch_penalty += 1
-
-        # per-week load tracking
-        team_week_counts[team1][week_idx - 1] += 1
-        team_week_counts[team2][week_idx - 1] += 1
-
-    # Compute bunching & idle gaps as SOFT
-    bunching_penalty = 0
-    idle_gap_penalty = 0
-
-    for counts in team_week_counts.values():
-        # bunching: extra matches in any single week
-        bunching_penalty += sum(c - 1 for c in counts if c > 1)
-
-        # idle gaps (>= 2 weeks between consecutive appearances)
-        weeks_played = [i for i, c in enumerate(counts) if c > 0]
-        if len(weeks_played) > 1:
-            gaps = [weeks_played[i+1] - weeks_played[i] - 1 for i in range(len(weeks_played) - 1)]
-            idle_gap_penalty += sum(1 for g in gaps if g >= 2)
-
-    # Aggregate soft
-    soft_violations = soft_availability + bunching_penalty + idle_gap_penalty + l1_pitch_penalty
-
-    # Paper-style fitness (pygad maximizes this)
-    fitness_scalar = 1.0 / (1.0 + hard_violations + soft_violations)
-
-    return fitness_scalar, team_week_counts
-
-def count_violations_paper_style(draw_structure, team_schedules, league_teams):
-    team_week_counts = defaultdict(lambda: [0] * number_of_weeks)
-    matches = flatten_matches(draw_structure)
-    L1_teams = set(league_teams["L1"])
-
-    hard = 0
-    soft_av = 0
-    l1_pitch = 0
-
-    for week_idx, day_key, timeslot_key, pitch, (team1, team2) in matches:
-        day_idx = DAY_INDEX[day_key]
-        slot_idx = SLOT_INDEX[timeslot_key]
-        a1 = team_schedules[team1][day_idx, slot_idx]
-        a2 = team_schedules[team2][day_idx, slot_idx]
-
-        if a1 == -2 or a2 == -2:
-            hard += 1
-        else:
-            if not (a1 == 2 and a2 == 2):
-                soft_av += 1
-
-        if team1 in L1_teams and pitch != 1:
-            l1_pitch += 1
-        if team2 in L1_teams and pitch != 1:
-            l1_pitch += 1
-
-        team_week_counts[team1][week_idx - 1] += 1
-        team_week_counts[team2][week_idx - 1] += 1
-
-    bunching = 0
     idle_gap = 0
-    for counts in team_week_counts.values():
-        bunching += sum(c - 1 for c in counts if c > 1)
-        weeks_played = [i for i, c in enumerate(counts) if c > 0]
-        if len(weeks_played) > 1:
-            gaps = [weeks_played[i+1] - weeks_played[i] - 1 for i in range(len(weeks_played) - 1)]
-            idle_gap += sum(1 for g in gaps if g >= 2)
+    for t in range(T):
+        wp = np.flatnonzero(week_counts[t] > 0)
+        if wp.size > 1:
+            gaps = np.diff(wp) - 1
+            idle_gap += int(np.sum(gaps >= 2))
 
     soft_total = soft_av + bunching + idle_gap + l1_pitch
-    return hard, soft_av, bunching, idle_gap, l1_pitch, soft_total
+    return hard, soft_total
+
+
+def _make_fitness_on_chromosome(teams1_idx, teams2_idx, L1_mask, avail_by_team_day_slot, hard_weight):
+    def fitness_func(ga_instance, solution, solution_idx):
+        hard, soft_total = _count_violations_on_chromosome(solution, teams1_idx, teams2_idx, L1_mask, avail_by_team_day_slot)
+        total = hard_weight * hard + soft_total
+        return float(1.0 / (1.0 + total))
+    return fitness_func
+
+
+def _make_move_or_swap_mutation(allowed_slots):
+    allowed = np.asarray(allowed_slots, dtype=np.int32)
+
+    def mutation(offspring, ga_instance):
+        mutp = getattr(ga_instance, "mutation_probability", 0.5)
+        for k in range(offspring.shape[0]):
+            if random.random() >= mutp:
+                continue
+            child = offspring[k]
+            used = np.zeros(TOTAL_SLOTS, dtype=np.bool_)
+            used[child] = True
+            free_mask = ~used[allowed]
+            if free_mask.any():
+                gi = np.random.randint(child.size)
+                new_sid = allowed[np.flatnonzero(free_mask)[np.random.randint(free_mask.sum())]]
+                child[gi] = new_sid
+            else:
+                i = np.random.randint(child.size)
+                j = (i + 1 + np.random.randint(child.size - 1)) % child.size
+                child[i], child[j] = child[j], child[i]
+        return offspring
+    return mutation
+
+
+def on_generation_callback(ga_instance, start_time, teams1_idx, teams2_idx, L1_mask, avail_by_team_day_slot, best_history):
+    best_sol, best_fit, _ = ga_instance.best_solution()
+    best_history.append(best_fit)
+
+    gen = ga_instance.generations_completed
+    if gen % 50 == 0:
+        hard, soft_total = _count_violations_on_chromosome(best_sol, teams1_idx, teams2_idx, L1_mask, avail_by_team_day_slot)
+        elapsed = time() - start_time
+        print(f"[Gen {gen:4d}] best_fit={best_fit:.6f} hard={hard} soft_total={soft_total} {elapsed:.2f}s")
+
 
 # -----------------------------------
 # GA wrapper
 # -----------------------------------
-def pygadBinaryEvo(draw, team_schedules, league_teams, plot=True,
-                   population_size=POPULATION_SIZE, generations=int(GENERATIONS/1000), mutation_prob=0.50, crossover_type="single_point"):
-    """
-    Match-centric chromosome:
-      - len = #matches
-      - gene = slot_id in [0..1919]
-    """
-    # Build encoding & constraints
+def pygadBinaryEvo(draw, team_schedules, league_teams, plot=True, generations=int(GENERATIONS / 2), mutation_prob=0.95, hard_weight=10.0):
+    # Encode once
     match_keys, base_chromosome = encode_draw_to_chromosome(draw)
     n_genes = len(base_chromosome)
     locked_slots = get_locked_slots(draw)
     allowed_slots = np.array([sid for sid in range(TOTAL_SLOTS) if sid not in locked_slots], dtype=np.int32)
-
-    print("")
-    print(f"Starting PyGAD baseline | pop={population_size} gens={generations} "
-          f"mutation_prob={mutation_prob} crossover={crossover_type} genes={n_genes}")
-
-    # Seed initial population = base + jittered copies
-    def seed_population(n):
-        pop = []
-        for i in range(n):
-            if i == 0:
-                pop.append(base_chromosome.copy())
-            else:
-                child = base_chromosome.copy()
-                # light random relocations
-                k = max(1, n_genes // 50)  # ~2% of genes moved initially
-                for _ in range(k):
-                    gi = random.randrange(n_genes)
-                    child[gi] = int(allowed_slots[random.randrange(len(allowed_slots))])
-                pop.append(child)
-        return np.array(pop, dtype=np.int32)
-
-    initial_pop = seed_population(population_size)
-
-    # Fitness (you’ll likely replace this with your tuned variant later)
-    def make_fitness_func(draw, match_keys, locked_slots, team_schedules, league_teams):
-        def fitness_func(ga_instance, solution, solution_idx):
-            decoded = decode_chromosome_to_draw(draw, match_keys, solution, locked_slots)
-            fitness_val, _ = calculate_metric_paper_style(decoded, team_schedules, league_teams)
-            return float(fitness_val)  # PyGAD maximizes this
-        return fitness_func
-
-    # Optional: callback to see progress
-    best_history = []
-    last_report_fit = None
-
-    def on_generation(ga_inst):
-        nonlocal last_report_fit
-        best_sol, best_fit, _ = ga_inst.best_solution()
-        best_history.append(best_fit)
-
-        gen = ga_inst.generations_completed  # 1-based after first generation completes
-        if gen % 10 == 0:
-            delta = (best_fit - last_report_fit) if last_report_fit is not None else 0.0
-
-            # Decode best only every 10 gens for light logging
-            decoded_best = decode_chromosome_to_draw(draw, match_keys, best_sol, locked_slots)
-            hard, soft_av, bunching, idle_gap, l1_pitch, soft_total = count_violations_paper_style(
-                decoded_best, team_schedules, league_teams
-            )
-
-            print(f"[Gen {gen:4d}] best_fitness={best_fit:.6f} "
-                  f"hard={hard}  soft_total={soft_total} ")
-
-            last_report_fit = best_fit
-
-    # Gene space: any allowed slot; pygad keeps values within the given space for each gene.
     gene_space = [allowed_slots] * n_genes
 
-    fitness_func = make_fitness_func(draw, match_keys, locked_slots, team_schedules, league_teams)
+    teams_in_matches = set([k[0] for k in match_keys]) | set([k[1] for k in match_keys])
+    team_ids = {t: i for i, t in enumerate(sorted(teams_in_matches))}
+    T = len(team_ids)
+
+    teams1_idx = np.array([team_ids[k[0]] for k in match_keys], dtype=np.int32)
+    teams2_idx = np.array([team_ids[k[1]] for k in match_keys], dtype=np.int32)
+
+    L1_mask = np.zeros(T, dtype=np.bool_)
+    for t in league_teams.get("L1", []):
+        if t in team_ids:
+            L1_mask[team_ids[t]] = True
+
+    N_DAYS = len(days_of_week)
+    N_SLOTS = len(time_slots)
+    avail_by_team_day_slot = np.zeros((T, N_DAYS, N_SLOTS), dtype=np.int8)
+    for name, idx in team_ids.items():
+        avail_by_team_day_slot[idx, :, :] = team_schedules[name]
+
+    start_time = time()
+    best_history = []
+    print("")
+    print(f"Starting PyGAD baseline | pop={POPULATION_SIZE} gens={generations} mutation_prob={mutation_prob} genes={n_genes}")
+
+    initial_pop = np.tile(base_chromosome, (POPULATION_SIZE, 1)).astype(np.int32)
+
+    fitness_func = _make_fitness_on_chromosome(teams1_idx, teams2_idx, L1_mask, avail_by_team_day_slot, hard_weight)
+
+    mutation_func = _make_move_or_swap_mutation(allowed_slots)
+
+    def on_generation(ga_inst):
+        on_generation_callback(ga_inst, start_time, teams1_idx, teams2_idx, L1_mask, avail_by_team_day_slot, best_history)
 
     ga = pygad.GA(
         initial_population=initial_pop,
         num_generations=generations,
-        num_parents_mating=max(2, population_size // 2),
-        fitness_func=fitness_func,             # <-- now 3-arg
+        num_parents_mating=max(1, POPULATION_SIZE // 10), # fewer parents enables stronger exploitation
+        fitness_func=fitness_func,
+        parent_selection_type="rws", # rulette weel selection as in the paper
         gene_space=gene_space,
         gene_type=int,
-        mutation_probability=mutation_prob,
-        mutation_type="random",
-        crossover_type=crossover_type,
-        keep_elitism=max(1, population_size // 10),
-        on_generation=on_generation,           # def on_generation(ga_instance): ... (already OK)
-        allow_duplicate_genes=True
+        mutation_type=mutation_func, # own mutation function
+        mutation_probability=mutation_prob, # as high as possible, since no other changes are present
+        crossover_type=None,
+        crossover_probability=0.0, # in my case it is not usefull to use crossover
+        keep_elitism=SURVIVORS,
+        on_generation=on_generation,
+        stop_criteria=[f"saturate_{patience}"], # early stopping
+        allow_duplicate_genes=False
     )
 
     ga.run()
 
-    # --------------------------
-    # Build 'draws' from final pop
-    # --------------------------
-    final_population = ga.population            # shape: (pop_size, n_genes)
+    gens_done = ga.generations_completed
+    if gens_done < generations:
+        print(f"[EarlyStop] GA stopped early after {gens_done} generations due to saturation ")
+
+    # Decode final population
+    final_population = ga.population
     draws = []
     for sol in final_population:
         d = decode_chromosome_to_draw(draw, match_keys, sol, locked_slots)
         draws.append(d)
 
-    # Let your downstream code select the very best with calculate_final_metric
+    # Evaluate final population
     final_metrics = [(calculate_final_metric(d, team_schedules, league_teams), d) for d in draws]
-    final_metrics.sort(key=lambda x: -x[0][0])  # Sort by the scalar metric
+    final_metrics.sort(key=lambda x: -x[0][0])
 
     best_metric, best_scores, _, best_value_counts = (
         final_metrics[0][0][0],
@@ -366,13 +288,12 @@ def pygadBinaryEvo(draw, team_schedules, league_teams, plot=True,
     )
     best_draw = final_metrics[0][1]
 
-    # Optional: quick plot using your history (only if you want)
     if plot and len(best_history) > 1:
         try:
             import matplotlib.pyplot as plt
             plt.figure(figsize=(7,4))
             plt.plot(best_history, marker='o')
-            plt.title(f"pygadBinaryEvo: best fitness over generations (pop={population_size})")
+            plt.title(f"pygadBinaryEvo: best fitness over generations (pop={POPULATION_SIZE})")
             plt.xlabel("Generation")
             plt.ylabel("Best fitness")
             plt.grid(True, alpha=0.3)
@@ -381,19 +302,25 @@ def pygadBinaryEvo(draw, team_schedules, league_teams, plot=True,
         except Exception:
             pass
     
-        print(f"Final best fitness: {best_metric}")
-        print("Final best draw scores:")
-        print(best_scores)
-        print("Weighted scores:")
-        print(f'[{weights["availability"] * best_scores[0]}, {weights["match_bunching_penalty"] * best_scores[1]}, {weights["idle_gap_penalty"] * best_scores[2]}, {weights["spread_reward"] * best_scores[3]}, {weights["L1_pitch_penalty"] * best_scores[4]}]')
-        print("")
-        print("Final best draw value_counts:")
-        print(best_value_counts)
+    print("\nGA FINAL BEST RESULT")
+    print("----------------------------")
+    print(f"Best METRIC: {best_metric}")
+    print("Final best draw scores:")
+    print(best_scores)
+    print("Weighted scores:")
+    print(f'[{weights["availability"] * best_scores[0]}, {weights["match_bunching_penalty"] * best_scores[1]}, {weights["idle_gap_penalty"] * best_scores[2]}, {weights["spread_reward"] * best_scores[3]}, {weights["L1_pitch_penalty"] * best_scores[4]}]')
+    print("")
+    print("Final best draw value_counts:")
+    print(best_value_counts)
+    print("[bad, no answer, might, good]")
 
-    return best_metric, best_draw, best_scores, best_value_counts
+    time_elapsed = time() - start_time
+    print(f"\nTotal time: {time_elapsed:.2f}s")
+
+    return best_metric, best_draw, best_scores, best_value_counts, time_elapsed
 
 if __name__ == "__main__":
-    #(team_schedules, possible_max_metric, league_teams, random_draw_data, greedy_draw_data, improved_greedy_draw_data) = run_non_ai_sorts()
-    #draw = improved_greedy_draw_data[0]
+    #(team_schedules, possible_max_metric,league_teams, random_draw_data, greedy_draw_data, impoved_greedy_draw_data) = run_non_ai_sorts()
+    #draw = impoved_greedy_draw_data[0]
     draw, team_schedules, possible_max_metric, league_teams = initial_sort(directory, plot=False)
-    _, _, _, _ = pygadBinaryEvo(draw, team_schedules, league_teams, plot=True)
+    _ = pygadBinaryEvo(draw, team_schedules, league_teams, plot=True)

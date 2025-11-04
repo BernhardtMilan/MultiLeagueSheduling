@@ -4,6 +4,7 @@ from time import time
 
 from init import *
 from sorsolo import calculate_metric, calculate_final_metric, initial_sort, DAY_INDEX, SLOT_INDEX
+from non_ai_sorts import run_non_ai_sorts
 
 def _get(draw, slot):
     w, d, t, p = slot
@@ -376,7 +377,7 @@ def ATS(draw, team_schedules, league_teams, plot=True,
         CANDIDATES_PER_ITER=POPULATION_SIZE,
         INIT_TABU_TENURE=20,
         MIN_TABU_TENURE=2,
-        NO_IMPROVE_LIMIT=patience):
+        NO_IMPROVE_LIMIT=2000):
     """
     Adaptive Tabu Search loop, with aspiration and tenure adaptation.
     Neighborhoods are stubs above for you to implement.
@@ -395,6 +396,8 @@ def ATS(draw, team_schedules, league_teams, plot=True,
     tabu_tenure = INIT_TABU_TENURE
     tabu = {}            # move_key -> expire_iter
     iters_since_improve = 0
+    stagnation_counter = 0
+    best_metrics = []
 
     start_time = time()
 
@@ -465,11 +468,25 @@ def ATS(draw, team_schedules, league_teams, plot=True,
         if iters_since_improve >= NO_IMPROVE_LIMIT and tabu_tenure > MIN_TABU_TENURE:
             tabu_tenure = max(MIN_TABU_TENURE, tabu_tenure - 2)
             iters_since_improve = 0
+        
+        current_best_metric = -best_pen  # convert to "higher is better"
+        if len(best_metrics) >= patience:
+            window_best = max(best_metrics[-patience:])
+            if (current_best_metric - window_best) < min_delta:
+                stagnation_counter += 1
+                if stagnation_counter >= patience:
+                    # keep history consistent, then break
+                    best_metrics.append(current_best_metric)
+                    print(f"\n[ATS] Early-stoping on iter {it+1} no significant improvement in {patience} generations.")
+                    break
+            else:
+                stagnation_counter = 0
+        
+        best_metrics.append(current_best_metric)
 
-        # (Optional) lightweight progress print
-        if (it + 1) % 200 == 0:
+        if (it + 1) % 100 == 0:
             elapsed = time() - start_time
-            print(f"[ATS] iter {it+1:6d} | best_matric={-best_pen:.1f} | tabu={tabu_tenure} | {elapsed:.1f}s")
+            print(f"[ATS] iter {it+1:6d} | best_metric={current_best_metric:.4f} | tabu={tabu_tenure} | {elapsed:.1f}s")
 
     # ----- Final scoring using your existing function -----
     final_metric, scores, weighted, value_counts = calculate_final_metric(best, team_schedules, league_teams)
@@ -490,11 +507,13 @@ def ATS(draw, team_schedules, league_teams, plot=True,
                         weights["L1_pitch_penalty"]*best_scores[4]])
     print("Value counts:", best_value_counts)
 
-    # (Optional) export or plot outside if you wish
-    return best_metric, best_draw, best_scores, best_value_counts
+    time_elapsed = time() - start_time
+    print(f"\nTotal time: {time_elapsed:.2f}s")
+
+    return best_metric, best_draw, best_scores, best_value_counts, time_elapsed
 
 if __name__ == "__main__":
     #(team_schedules, possible_max_metric, league_teams, random_draw_data, greedy_draw_data, improved_greedy_draw_data) = run_non_ai_sorts()
     #draw = improved_greedy_draw_data[0]
     draw, team_schedules, possible_max_metric, league_teams = initial_sort(directory, plot=False)
-    _, _, _, _ = ATS(draw, team_schedules, league_teams, plot=True)
+    _, _, _, _, _ = ATS(draw, team_schedules, league_teams, plot=True)

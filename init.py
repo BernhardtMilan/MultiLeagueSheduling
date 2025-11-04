@@ -1,16 +1,16 @@
 import enlighten
 import os
 
-POPULATION_SIZE = 24
-SURVIVORS = 4
-GENERATIONS = 2000
+POPULATION_SIZE = 36
+SURVIVORS = 6
+GENERATIONS = 60000
 
 targeting_treshold = 0.90
 target_or_random = 0.7
 
 #early stopping
-patience = 20000
-min_delta = 0.1
+patience = 3000
+min_delta = 0.2
 
 weights = {
     "availability": 4,
