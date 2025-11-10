@@ -248,6 +248,12 @@ def sort_random_matches(draw_structure, leagues_all_games):
                         
     return draw_structure
 
+def fact(n):
+    out = 1
+    for i in range(2, n+1):
+        out *= i
+    return out
+
 def calulate_team_metric(draw_structure, team_schedules, league_teams):
 
     data = defaultdict(lambda: {
@@ -272,16 +278,23 @@ def calulate_team_metric(draw_structure, team_schedules, league_teams):
         
     for team, counts in team_week_counts.items():
         # bunching: playing more than once in a week
-        data[team]["match_bunching_penalty"] = sum((c - 1) for c in counts if c > 1)
+        mb = 0
+        for k in counts:
+            if k > 1:
+                mb += fact(k - 1)
+        data[team]["match_bunching_penalty"] = mb
 
         # spread + idle gaps
         weeks_played = [i for i, c in enumerate(counts) if c > 0]
         data[team]["spread_reward"] = len(weeks_played)
 
+        ig = 0
         if len(weeks_played) > 1:
-            gaps = [weeks_played[i+1] - weeks_played[i] - 1 for i in range(len(weeks_played)-1)]
-            # penalize gaps of 2+ idle weeks (same rule as your global metric)
-            data[team]["idle_gap_penalty"] = sum(1 for g in gaps if g >= 2)
+            for i in range(len(weeks_played) - 1):
+                g = weeks_played[i+1] - weeks_played[i] - 1
+                if g >= 2:
+                    ig += fact(g - 1)
+        data[team]["idle_gap_penalty"] = ig
 
         data[team]["availability"] *= weights["availability"]
         data[team]["match_bunching_penalty"] *= weights["match_bunching_penalty"]
@@ -339,11 +352,15 @@ def calculate_metric(draw_structure, team_schedules, league_teams):
     for counts in team_week_counts.values():
         weeks_played = [i for i, count in enumerate(counts) if count > 0]
 
-        bunching_penalty += sum(count - 1 for count in counts if count > 1)
+        for k in counts:
+            if k > 1:
+                bunching_penalty += fact(k - 1)
 
         if len(weeks_played) > 1:
-            gaps = [weeks_played[i+1] - weeks_played[i] - 1 for i in range(len(weeks_played)-1)]
-            idle_gap_penalty += sum(1 for gap in gaps if gap >= 2)
+            for i in range(len(weeks_played) - 1):
+                g = weeks_played[i+1] - weeks_played[i] - 1
+                if g >= 2:
+                    idle_gap_penalty += fact(g - 1)
 
         spread_reward += len(weeks_played)
 
@@ -421,18 +438,17 @@ def calculate_final_metric(draw_structure, team_schedules, league_teams):
 
         # Count how many matches per week
         # Penalty: too many matches in the same week
-        for w in weeks_played:
+        for w in weeks_list:
             week_counts[w] += 1
-        for week in week_counts:
-            if week_counts[week] > 1:
-                bunching_penalty += (week_counts[week] - 1)
+        for w, k in week_counts.items():
+            if k > 1:
+                bunching_penalty += fact(k - 1)
 
         # Penalty: long gaps, not including before the first and after the last week
-        gaps = [
-            weeks_list[i+1] - weeks_list[i] - 1
-            for i in range(len(weeks_list)-1)
-        ]
-        idle_gap_penalty += sum(1 for gap in gaps if gap >= 2)
+        for i in range(len(weeks_list) - 1):
+            gap = weeks_list[i+1] - weeks_list[i] - 1
+            if gap >= 2:
+                idle_gap_penalty += fact(gap - 1)
 
         # Reward: playing in many different weeks
         spread_reward += len(set(weeks_list))

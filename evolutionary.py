@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from time import perf_counter, time
 
-from sorsolo import initial_sort, calculate_metric, calculate_final_metric, generate_output, DAY_INDEX, SLOT_INDEX, flatten_matches
+from sorsolo import initial_sort, calculate_metric, calculate_final_metric, generate_output, DAY_INDEX, SLOT_INDEX, flatten_matches, fact
 from init import *
 
 pitches = [1, 2, 3, 4]
@@ -19,7 +19,7 @@ def fancy_log(generation, metric, prev_metric, max_metric, time_elapsed, start_t
     progress.desc = f"Gen {generation:3d} | Best: {metric:.1f} ({gain:+.1f}) - {max_metric:.0f}({percent:.1f}%) | {time_elapsed:.2f}s"
     progress.update(10)
     if generation % 100 == 0:
-        print(f"\nGeneration {generation:3d} | Best Metric: {metric:.1f} | {time()-start_time:.2f}s")
+        print(f"\n[EVO] Generation {generation:3d} | Best Metric: {metric:.1f} | {time()-start_time:.2f}s")
 
 def random_match_changes(draw_structure):
     mutated_draw = draw_structure
@@ -333,6 +333,27 @@ def calculate_new_week_list(week_list, changes):
 
     return new_week_list
 
+def bunching_value(counts):
+        s = 0
+        for k in counts:
+            if k > 1:
+                s += fact(k - 1)
+        return s
+
+def idle_gap_value(counts):
+        weeks_played = [i for i, c in enumerate(counts) if c > 0]
+        if len(weeks_played) <= 1:
+            return 0
+        s = 0
+        for i in range(len(weeks_played) - 1):
+            g = weeks_played[i+1] - weeks_played[i] - 1
+            if g >= 2:
+                s += fact(g - 1)
+        return s 
+
+def spread_value(counts):
+        return sum(1 for c in counts if c > 0)
+
 def caluclate_metric_change(old_metric, week_list, changes, team_schedules, league_teams):
 
     if changes is None:
@@ -352,29 +373,13 @@ def caluclate_metric_change(old_metric, week_list, changes, team_schedules, leag
         old_counts = week_list[team]
 
         # Bunching
-        new_bunching = sum(c - 1 for c in new_counts if c > 1)
-        old_bunching = sum(c - 1 for c in old_counts if c > 1)
-        change_in_bunching_penalty += new_bunching - old_bunching
+        change_in_bunching_penalty += bunching_value(new_counts) - bunching_value(old_counts)
 
         # Spread
-        new_weeks = [i for i, c in enumerate(new_counts) if c > 0]
-        old_weeks = [i for i, c in enumerate(old_counts) if c > 0]
-        change_in_spread_reward += len(new_weeks) - len(old_weeks)
+        change_in_spread_reward += spread_value(new_counts) - spread_value(old_counts)
 
         # Idle gaps
-        if len(new_weeks) > 1:
-            new_gaps = [new_weeks[i+1] - new_weeks[i] - 1 for i in range(len(new_weeks)-1)]
-            new_idle = sum(1 for g in new_gaps if g >= 2)
-        else:
-            new_idle = 0
-
-        if len(old_weeks) > 1:
-            old_gaps = [old_weeks[i+1] - old_weeks[i] - 1 for i in range(len(old_weeks)-1)]
-            old_idle = sum(1 for g in old_gaps if g >= 2)
-        else:
-            old_idle = 0
-
-        change_in_idle_gap_penalty += new_idle - old_idle
+        change_in_idle_gap_penalty += idle_gap_value(new_counts) - idle_gap_value(old_counts)
 
     # L1 pitches
     L1_teams = set(league_teams["L1"])
