@@ -216,7 +216,7 @@ def plot_all_leagues_clusters(divided_leagues, division_counts, method="tsne"):
             for idx, center in enumerate(group_means):
                 ax.scatter(*center, color=cmap(idx), marker='X', s=150, edgecolor='white')
 
-        ax.set_title(f"League {league_idx+1} ({method.upper()})")
+        ax.set_title(f"League {league_idx+1}")
         ax.set_xlabel("Component 1")
         ax.set_ylabel("Component 2")
         ax.grid(True)
