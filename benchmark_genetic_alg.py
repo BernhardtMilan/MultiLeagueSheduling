@@ -259,7 +259,7 @@ def pygadBinaryEvo(draw, team_schedules, league_teams, plot=True, generations=in
         crossover_probability=0.0, # in my case it is not usefull to use crossover
         keep_elitism=SURVIVORS,
         on_generation=on_generation,
-        stop_criteria=[f"saturate_{patience}"], # early stopping
+        stop_criteria=[f"saturate_{int(patience//2)}"], # early stopping
         allow_duplicate_genes=False
     )
 
