@@ -294,6 +294,20 @@ def render_week_tables(draw_structure, highlight_teams=None):
 
             st.dataframe(df, use_container_width=True)
 
+def rename_teams(team_schedules):
+    team_schedules["BMETBK"] = team_schedules["BME-TBK"]
+    del team_schedules["BME-TBK"]
+    team_schedules["BeerBarBrok"] = team_schedules["Beer-Bar-Brok"]
+    del team_schedules["Beer-Bar-Brok"]
+    team_schedules["Boccsboccs"] = team_schedules["Boccs-boccs"]
+    del team_schedules["Boccs-boccs"]
+    team_schedules["VIKKingek"] = team_schedules["VIK-Kingek"]
+    del team_schedules["VIK-Kingek"]
+    team_schedules["Chihuahuak"] = team_schedules["Chihuahua-k"]
+    del team_schedules["Chihuahua-k"]
+    
+    return team_schedules
+
 def main():
     # 1. Set page config once
     st.set_page_config(layout="wide")
@@ -309,6 +323,7 @@ def main():
     @st.cache_data
     def load_all_data():
         leagues, team_schedules = get_input_data_from_saves(directory, plot=False)
+        team_schedules = rename_teams(team_schedules)
         df = load_schedule()
         parsed = parse_schedule(df)
         draw_structure = build_draw_structure(parsed)

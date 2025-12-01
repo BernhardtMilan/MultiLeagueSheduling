@@ -1,5 +1,7 @@
 import json
 import re
+import matplotlib.pyplot as plt
+from init import color_greedy, color_impr, color_evo, color_ats, color_ga
 
 def plot_improved_and_evo_delta_over_weeks(
     infile: str,
@@ -9,7 +11,6 @@ def plot_improved_and_evo_delta_over_weeks(
     Plot Improved Greedy vs Evolutionary across weeks from an aggregated JSON:
       infile = runs/metrics_by_weeks.json (with a top-level "datasets" array)
     """
-    import matplotlib.pyplot as plt
 
     bundle = json.load(open(infile, "r", encoding="utf-8"))
 
@@ -70,8 +71,8 @@ def plot_improved_and_evo_delta_over_weeks(
     fig, ax = plt.subplots(figsize=(9, 5))
 
     # Lines on top
-    evo_line, = ax.plot(weeks, evo,       marker='o', linewidth=2, label="Evolutionary",    zorder=3)
-    imp_line, = ax.plot(weeks, improved,  marker='o', linewidth=2, label="Improved Greedy", zorder=3)
+    evo_line, = ax.plot(weeks, evo,       marker='o', linewidth=2, color=color_evo, label="Proposed Method",    zorder=3)
+    imp_line, = ax.plot(weeks, improved,  marker='o', linewidth=2, color=color_impr, label="Improved Greedy", zorder=3)
 
     # Shaded gap "pill" width
     if len(weeks) >= 2:
@@ -110,7 +111,103 @@ def plot_improved_and_evo_delta_over_weeks(
                 zorder=5
             )
 
-    ax.set_title("Scheduling Metric by the number of Weeks (Improved Greedy vs Evolutionary)")
+    #ax.set_title("Scheduling Metric by the number of Weeks (Improved Greedy vs Evolutionary)")
+    ax.set_xlabel("Tournament length in weeks")
+    ax.set_ylabel("Metric score")
+    ax.grid(axis='y', linestyle='--', alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+
+    try:
+        plt.show()
+    except Exception:
+        pass
+
+def plot_top_of_ga_vs_ats_over_weeks(infile: str, annotate: bool = True,):
+
+    bundle = json.load(open(infile, "r", encoding="utf-8"))
+    datasets = bundle.get("datasets", [])
+    if not datasets:
+        raise ValueError("No 'datasets' found in the JSON.")
+
+    # --- Determine week order (same logic as your original) ---
+    weeks_grid = bundle.get("weeks_grid")
+
+    def parse_week_label(lbl: str) -> int:
+        m = re.search(r"(\d+)", lbl or "")
+        if not m:
+            raise ValueError(f"Could not parse week number from dataset label: {lbl}")
+        return int(m.group(1))
+
+    # Collect rows
+    items = []
+    for d in datasets:
+        label = d.get("dataset", "")
+        w = parse_week_label(label) if weeks_grid is None else None
+        items.append({
+            "label": label,
+            "week": w,
+            "ga":   float(d["ga_best_metric"]),
+            "ats":  float(d["ats_best_metric"]),
+            "evo":  float(d["evo_best_metric"]),
+            "impr": float(d["improved_greedy_metric"]),
+        })
+
+    # Order by weeks_grid or by parsed week number
+    if weeks_grid:
+        order = list(weeks_grid)
+        mapped = []
+        for w in order:
+            found = None
+            for it in items:
+                if it.get("week") is None:
+                    it["week"] = parse_week_label(it["label"])
+                if it["week"] == w:
+                    found = it
+                    break
+            if found is None:
+                raise ValueError(f"Week {w} from weeks_grid not found among dataset labels.")
+            mapped.append(found)
+        rows = mapped
+    else:
+        rows = sorted(items, key=lambda r: r["week"])
+
+    weeks   = [r["week"] for r in rows]
+    ga_vals = [r["ga"]   for r in rows]
+    ats_vals= [r["ats"]  for r in rows]
+    evo_vals= [r["evo"]  for r in rows]
+    imp_vals= [r["impr"] for r in rows]
+
+    # --- Plot ---
+    fig, ax = plt.subplots(figsize=(9, 5))
+
+    ax.plot(weeks, evo_vals, marker='o', linewidth=2.2, color=color_evo,  label="Proposed Method")
+    ax.plot(weeks, ats_vals, marker='o', linewidth=2.2, color=color_ats,  label="Adaptive Tabu Search")
+    ax.plot(weeks, ga_vals,  marker='o', linewidth=2.2, color=color_ga,   label="Genetic Algorithm")
+    ax.plot(weeks, imp_vals, marker='o', linewidth=2.2, color=color_impr, label="Improved Greedy")
+
+    # --- Annotate all values on each series ---
+    if annotate:
+        def annotate_series(xs, ys, tag):
+            for x, y in zip(xs, ys):
+                ax.text(
+                    x, y, f"{y:.1f}",
+                    ha="center", va="bottom", fontsize=8.5, color="0.1",
+                    bbox=dict(boxstyle="round,pad=0.2", facecolor="0.92", edgecolor="0.8", alpha=0.9)
+                )
+        annotate_series(weeks, ga_vals,  "GA")
+        annotate_series(weeks, ats_vals, "ATS")
+        annotate_series(weeks, evo_vals, "EVO")
+        annotate_series(weeks, imp_vals, "IMPR")
+
+    # Axes, grid, legend
+    y_all   = ga_vals + ats_vals + evo_vals + imp_vals
+    y_min   = min(y_all)
+    y_max   = max(y_all)
+    y_range = max(1e-9, y_max - y_min)
+    ax.set_ylim(y_min - 0.05 * y_range, y_max + 0.18 * y_range)
+
+    #ax.set_title("Metric Comparison by Week (GA, ATS, EVO, Improved Greedy)")
     ax.set_xlabel("Tournament length in weeks")
     ax.set_ylabel("Metric score")
     ax.grid(axis='y', linestyle='--', alpha=0.3)
@@ -125,3 +222,4 @@ def plot_improved_and_evo_delta_over_weeks(
 if __name__ == "__main__":
     infile = "./runs/metrics_by_weeks.json"
     plot_improved_and_evo_delta_over_weeks(infile, annotate=True)
+    plot_top_of_ga_vs_ats_over_weeks(infile, annotate=True)

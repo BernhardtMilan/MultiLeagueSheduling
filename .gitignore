@@ -5,6 +5,6 @@ random_sort.npy
 venv/
 *.png
 __pycache__/
-*.pdf
+Ivan*.pdf
 ssh.txt
 /runs/

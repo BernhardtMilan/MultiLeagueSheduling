@@ -3,7 +3,7 @@ import os
 
 POPULATION_SIZE = 36
 SURVIVORS = 6
-GENERATIONS = 60000
+GENERATIONS = 40000
 
 targeting_treshold = 0.90
 target_or_random = 0.7
@@ -56,3 +56,9 @@ occupied_rules = [
     "Week 5 Wednesday 19:00-20:00",
     "Week 2 Tuesday"
 ]
+
+color_greedy = "#2ECC40"
+color_impr = "#FFA500"
+color_evo = "#467FD6"
+color_ats = "#E74C3C"
+color_ga = "#9B59B6"

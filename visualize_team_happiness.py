@@ -2,6 +2,7 @@ import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from init import color_greedy, color_impr, color_evo, color_ats, color_ga
 
 # ---------- config ----------
 PATH_GREEDY   = "./runs/per_team_metric_GREEDY.json"
@@ -200,11 +201,11 @@ def strip_grid(metrics_pct, start=0, sharey=True):
 
         jitter = lambda n: rng.normal(0, 0.06, size=n)
 
-        ax.scatter(x_pos["GREEDY"]          + jitter(g_vals.size),  g_vals,  alpha=0.6, s=20, marker="o", label="GREEDY")
-        ax.scatter(x_pos["IMPROVED GREEDY"] + jitter(i_vals.size),  i_vals,  alpha=0.6, s=20, marker="o", label="IMPR. GREEDY")
-        ax.scatter(x_pos["EVOLUTIONARY"]    + jitter(e_vals.size),  e_vals,  alpha=0.6, s=20, marker="o", label="EVOLUTIONARY")
-        ax.scatter(x_pos["ATS"]             + jitter(a_vals.size),  a_vals,  alpha=0.6, s=20, marker="o", label="ATS")
-        ax.scatter(x_pos["GA"]              + jitter(ga_vals.size), ga_vals, alpha=0.6, s=20, marker="o", label="GA")
+        ax.scatter(x_pos["GREEDY"]          + jitter(g_vals.size),  g_vals,  alpha=0.6, s=20, color=color_greedy, marker="o", label="Greedy")
+        ax.scatter(x_pos["IMPROVED GREEDY"] + jitter(i_vals.size),  i_vals,  alpha=0.6, s=20, color=color_impr, marker="o", label="Impr. Greedy")
+        ax.scatter(x_pos["EVOLUTIONARY"]    + jitter(e_vals.size),  e_vals,  alpha=0.6, s=20, color=color_evo, marker="o", label="Proposed")
+        ax.scatter(x_pos["ATS"]             + jitter(a_vals.size),  a_vals,  alpha=0.6, s=20, color=color_ats, marker="o", label="ATS")
+        ax.scatter(x_pos["GA"]              + jitter(ga_vals.size), ga_vals, alpha=0.6, s=20, color=color_ga, marker="o", label="GA")
 
         # Keep positions but remove labels to avoid duplicates with legend
         ax.set_xticks([0, 1, 2, 3, 4])

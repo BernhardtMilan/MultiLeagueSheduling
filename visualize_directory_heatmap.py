@@ -81,13 +81,11 @@ def main(selected_names=None, *, max_cols: int = 3):
         ax = axes[i]
         im = ax.imshow(mat, norm=norm, aspect="equal")
         ax.set_aspect("equal", adjustable="box")
-        ax.set_title(name)
+        ax.set_title("Availability matrix heatmap")
         ax.set_xticks(range(len(time_slots)))
         ax.set_yticks(range(len(days_of_week)))
         ax.set_xticklabels(time_slots, rotation=45, ha="right")
         ax.set_yticklabels(days_of_week)
-        ax.set_xlabel("Time slots")
-        ax.set_ylabel("Days")
 
         # light cell grid
         ax.set_xticks(np.arange(-0.5, 6, 1), minor=True)
@@ -105,5 +103,6 @@ def main(selected_names=None, *, max_cols: int = 3):
     plt.show()
 
 if __name__ == "__main__":
-    main(["fully_random", "optimal", "real_world_like"], max_cols=3)
+    #main(["fully_random", "optimal", "real_world_like"], max_cols=3)
+    main(["real_world_like"], max_cols=1)
     #main()
