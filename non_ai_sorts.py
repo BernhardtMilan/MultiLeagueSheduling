@@ -2,6 +2,7 @@ from sorsolo import *
 from league_devider import devide_leagues
 import random
 from collections import defaultdict
+import time
 
 def pure_random_sort(draw_structure, leagues_all_games):
 
@@ -236,7 +237,9 @@ def run_non_ai_sorts():
     greedy_draw_structure = greedy_sort(draw_structures[1], leagues_all_games, league_teams, team_schedules)
     greedy_draw_data= visualize_metric(greedy_draw_structure, team_schedules, league_teams, devided_leagues, division_counts, "GREEDY")
 
+    now = time.time()
     impoved_greedy_draw_structure = improved_greedy_sort(draw_structures[2], leagues_all_games, league_teams, team_schedules)
+    print(f"Improved Greedy took {time.time() - now} seconds")
     improved_greedy_draw_data = visualize_metric(impoved_greedy_draw_structure, team_schedules, league_teams, devided_leagues, division_counts, "IMPROVED GREEDY")
 
     return (team_schedules, possible_max_metric, league_teams, rendom_draw_data, greedy_draw_data, improved_greedy_draw_data)
