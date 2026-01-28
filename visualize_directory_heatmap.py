@@ -81,7 +81,7 @@ def main(selected_names=None, *, max_cols: int = 3):
         ax = axes[i]
         im = ax.imshow(mat, norm=norm, aspect="equal")
         ax.set_aspect("equal", adjustable="box")
-        ax.set_title("Availability matrix heatmap")
+        ax.set_title("Heatmap of a real world example availability matrices of 202 teams")
         ax.set_xticks(range(len(time_slots)))
         ax.set_yticks(range(len(days_of_week)))
         ax.set_xticklabels(time_slots, rotation=45, ha="right")

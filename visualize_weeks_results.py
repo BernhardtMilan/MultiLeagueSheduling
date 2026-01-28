@@ -111,7 +111,7 @@ def plot_improved_and_evo_delta_over_weeks(
                 zorder=5
             )
 
-    #ax.set_title("Scheduling Metric by the number of Weeks (Improved Greedy vs Evolutionary)")
+    ax.set_title("Scheduling Metric by the number of Weeks (Improved Greedy vs Evolutionary)")
     ax.set_xlabel("Tournament length in weeks")
     ax.set_ylabel("Metric score")
     ax.grid(axis='y', linestyle='--', alpha=0.3)
@@ -207,7 +207,7 @@ def plot_top_of_ga_vs_ats_over_weeks(infile: str, annotate: bool = True,):
     y_range = max(1e-9, y_max - y_min)
     ax.set_ylim(y_min - 0.05 * y_range, y_max + 0.18 * y_range)
 
-    #ax.set_title("Metric Comparison by Week (GA, ATS, EVO, Improved Greedy)")
+    ax.set_title("Metric Comparison by the number of Weeks")
     ax.set_xlabel("Tournament length in weeks")
     ax.set_ylabel("Metric score")
     ax.grid(axis='y', linestyle='--', alpha=0.3)

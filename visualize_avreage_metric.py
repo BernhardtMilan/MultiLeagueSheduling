@@ -1,79 +1,190 @@
-import matplotlib.pyplot as plt
-import seaborn as sns
+import json
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-improved_greedy_metric = [17648.4, 17730.5, 17689.3, 17728.9, 17689.5, 17762.0, 17824.4, 17757.8, 17683.6, 17619.6, 17698.3]
-evo_best_metric = [18000.0, 18004.0, 17998.5, 18010.0, 18013.5, 17996.5, 18016.0, 18013.0, 17998.5, 18004.0, 18014.0]
-ats_best_metric = [17875.3, 17824.4, 17971.3, 17999.8, 17938.7, 17879.4, 17785.1, 17904.2, 17866.9, 17914.8, 17898.4]
-ga_best_metric = [17795.2, 17876.6, 17919.4, 17746.3, 17888.3, 17776.5, 17826.9, 17804.6, 17763.7, 17638.9, 17754.2]
 
-data = [
-    improved_greedy_metric,
-    evo_best_metric,
-    ats_best_metric,
-    ga_best_metric
+RUNS_DIR = Path(__file__).resolve().parent / "runs"
+WEEK = 16
+
+METRIC_FIELDS = [
+    "improved_greedy_metric",
+    "evo_best_metric",
+    "ats_best_metric",
+    "ga_best_metric",
+    #"evo_time_elapsed",
+    #"ats_time_elapsed",
+    #"ga_time_elapsed",
 ]
 
-labels = ['Impr. Greedy', 'Proposed method', 'ATS', 'GA']
-
-stats = {
-    "Min": [np.min(d) for d in data],
-    "Max": [np.max(d) for d in data],
-    "Mean": [np.mean(d) for d in data],
-    "Range": [np.ptp(d) for d in data],
-    "Std. Dev.": [np.std(d, ddof=0) for d in data]
+LABELS = {
+    "improved_greedy_metric": "Impr. Greedy",
+    "evo_best_metric": "Proposed method",
+    "ats_best_metric": "ATS",
+    "ga_best_metric": "GA",
+    #"evo_time_elapsed": "Evo_time",
+    #"ats_time_elapsed": "ATS_time",
+    #"ga_time_elapsed": "GA_time",
 }
 
-# --- Print LaTeX-formatted table ---
-print("\\textbf{Statistic} & \\textbf{ImprovedGreedy} & \\textbf{Proposed Method} & \\textbf{ATS} & \\textbf{GA} \\\\")
-for stat, values in stats.items():
-    vals = [round(v, 1) for v in values]
-    max_idx = int(np.argmax(vals))  # best (highest) value
-    formatted = " & ".join([f"\\textbf{{{v}}}" if i == max_idx else f"{v}" for i, v in enumerate(vals)])
-    print(f"{stat:<11}& {formatted} \\\\")
+LABELS_IN_ORDER = [LABELS[f] for f in METRIC_FIELDS]
 
-plt.figure(figsize=(8, 5))
-parts = plt.violinplot(data, showmeans=True, showextrema=True, showmedians=True)
+def _week_from_dataset_name(dataset_name: str) -> int | None:
+    # fallback if weeks_grid missing or mismatched
+    if isinstance(dataset_name, str) and dataset_name.startswith("week_"):
+        try:
+            return int(dataset_name.split("_", 1)[1])
+        except Exception:
+            return None
+    return None
 
-for pc in parts['bodies']:
-    pc.set_facecolor("#87A7EB")  # light blue
-    pc.set_edgecolor('black')
-    pc.set_alpha(0.8)
 
-plt.xticks(range(1, len(labels) + 1), labels)
-plt.ylabel('Metric Value')
-plt.title('Comparison of Metric Values Across Methods')
+def extract_rows_from_file(json_path: Path, target_week: int | None) -> list[dict]:
+    """
+    Returns a list of rows. Each row corresponds to ONE dataset entry in the JSON file.
+    Inclusion logic:
+      - If weeks_grid exists and has an entry at index i, use weeks_grid[i] as the week.
+      - Else fall back to parsing dataset["dataset"] like "week_16".
+      - If target_week is not None, include only matching week entries.
+    """
+    with json_path.open("r", encoding="utf-8") as f:
+        obj = json.load(f)
 
-plt.grid(axis='y', linestyle='--', alpha=0.7)
-plt.tight_layout()
-plt.show()
+    datasets = obj.get("datasets", [])
+    weeks_grid = obj.get("weeks_grid", None)
 
-# Combine into a tidy DataFrame (Seaborn expects this format)
-data = pd.DataFrame({
-    'Improved Greedy': improved_greedy_metric,
-    'Proposed Method': evo_best_metric,
-    'ATS': ats_best_metric,
-    'GA': ga_best_metric
-})
+    rows = []
+    for i, d in enumerate(datasets):
+        # Decide week for this dataset entry
+        week_i = None
+        if isinstance(weeks_grid, list) and i < len(weeks_grid):
+            try:
+                week_i = int(weeks_grid[i])
+            except Exception:
+                week_i = None
 
-# Melt for long-form plotting
-df_long = data.melt(var_name='Method', value_name='Metric')
+        if week_i is None:
+            week_i = _week_from_dataset_name(d.get("dataset", ""))
 
-# --- Plot ---
-plt.figure(figsize=(9, 6))
+        # Filter
+        if target_week is not None and week_i != target_week:
+            continue
 
-# Boxplot: shows median, quartiles, outliers
-sns.boxplot(x='Method', y='Metric', data=df_long, width=0.5, fliersize=0, color="#87A7EB", boxprops={'alpha':0.7})
+        row = {
+            "path": str(json_path),
+            "file_run": json_path.parent.name,  # folder name
+            "entry_idx": i,                      # which dataset entry inside file
+            "week": week_i,
+            "timestamp": obj.get("timestamp"),
+            "schema_version": obj.get("schema_version"),
+        }
 
-# Swarmplot: shows all data points
-sns.swarmplot(x='Method', y='Metric', data=df_long, color='black', alpha=0.7, size=5)
+        for k in METRIC_FIELDS:
+            row[k] = d.get(k, np.nan)
 
-# --- Style ---
-plt.title("Comparison of Metric Values Across Methods", fontsize=14,)
-plt.xlabel("")
-plt.ylabel("Metric Value")
-plt.grid(axis='y', linestyle='--', alpha=0.6)
-plt.tight_layout()
+        rows.append(row)
 
-plt.show()
+    return rows
+
+
+def collect_all_entries(runs_dir: Path, target_week: int | None) -> pd.DataFrame:
+    files = sorted(runs_dir.rglob("metrics_by_weeks.json"))
+    all_rows = []
+    for fp in files:
+        all_rows.extend(extract_rows_from_file(fp, target_week=target_week))
+
+    df = pd.DataFrame(all_rows)
+    if df.empty:
+        return df
+
+    for k in METRIC_FIELDS:
+        df[k] = pd.to_numeric(df[k], errors="coerce")
+
+    return df
+
+if __name__ == "__main__":
+    df_runs = collect_all_entries(RUNS_DIR, target_week=WEEK)
+    if df_runs.empty:
+        raise RuntimeError(
+            f"No dataset entries found under {RUNS_DIR} matching week={WEEK}."
+        )
+
+    data = []
+    for field in METRIC_FIELDS:
+        data.append(df_runs[field].dropna().tolist())
+
+    labels = LABELS_IN_ORDER
+
+    print(f"Number of runs: {len(data[0])}")
+
+    stats = {
+        "Min": [np.min(d) for d in data],
+        "Max": [np.max(d) for d in data],
+        "Mean": [np.mean(d) for d in data],
+        "Range": [np.ptp(d) for d in data],
+        "Std. Dev.": [np.std(d, ddof=0) for d in data],
+    }
+
+    print("\\textbf{Statistic} & \\textbf{ImprovedGreedy} & \\textbf{Proposed Method} & \\textbf{ATS} & \\textbf{GA} \\\\")
+    for stat, values in stats.items():
+        vals = [round(v, 1) for v in values]
+        max_idx = int(np.argmax(vals))  # best (highest) value (same as your old code)
+        formatted = " & ".join(
+            [f"\\textbf{{{v}}}" if i == max_idx else f"{v}" for i, v in enumerate(vals)]
+        )
+        print(f"{stat:<11}& {formatted} \\\\")
+
+    plt.figure(figsize=(8, 5))
+    parts = plt.violinplot(data, showmeans=True, showextrema=True, showmedians=True)
+
+    for pc in parts["bodies"]:
+        pc.set_facecolor("#87A7EB")  # light blue
+        pc.set_edgecolor("black")
+        pc.set_alpha(0.8)
+
+    plt.xticks(range(1, len(labels) + 1), labels)
+    plt.ylabel("Resulting Metric Value [-]")
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+    plt.tight_layout()
+    plt.show()
+
+    wide = pd.DataFrame(
+        {
+            "Improved Greedy": data[0],
+            "Proposed Method": data[1],
+            "ATS": data[2],
+            "GA": data[3],
+        }
+    )
+
+    df_long = wide.melt(var_name="Method", value_name="Metric")
+
+    plt.figure(figsize=(9, 6))
+
+    sns.boxplot(
+        x="Method",
+        y="Metric",
+        data=df_long,
+        width=0.5,
+        fliersize=0,
+        color="#87A7EB",
+        boxprops={"alpha": 0.7},
+    )
+    sns.swarmplot(
+        x="Method",
+        y="Metric",
+        data=df_long,
+        color="black",
+        alpha=0.7,
+        size=5,
+    )
+
+    plt.title("Comparison of Metric Values Across Methods", fontsize=14)
+    plt.xlabel("")
+    plt.ylabel("Metric Value")
+    plt.grid(axis="y", linestyle="--", alpha=0.6)
+    plt.tight_layout()
+    plt.show()

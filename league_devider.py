@@ -3,6 +3,7 @@ import numpy as np
 from init import *
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 from matplotlib.lines import Line2D
 from sklearn.cluster import KMeans
 from sklearn.metrics import pairwise_distances_argmin_min
@@ -153,38 +154,35 @@ def assign_random_teams_to_groups(league_items, group_sizes):
     return divided
 
 def plot_all_leagues_clusters(divided_leagues, division_counts, method="tsne"):
-    #import umap.umap_ as umap
+    # import umap.umap_ as umap
     from sklearn.decomposition import PCA
-    
+
     reducer_cls = {
         "tsne": lambda X: TSNE(n_components=2, random_state=42, perplexity=10).fit_transform(X),
         "umap": lambda X: umap.UMAP(n_components=2, random_state=42, n_neighbors=min(10, len(X)-1)).fit_transform(X),
-        "pca": lambda X: PCA(n_components=2).fit_transform(X)
+        "pca":  lambda X: PCA(n_components=2).fit_transform(X),
     }
 
     if method not in reducer_cls:
         raise ValueError("Method must be 'tsne', 'umap', or 'pca'")
 
     reducer = reducer_cls[method]
+    markers = ['d', 'o', '^', 's']
 
     # Split groups into their original leagues
     grouped_by_league = []
     idx = 0
     for count in division_counts:
-        grouped_by_league.append(divided_leagues[idx:idx+count])
+        grouped_by_league.append(divided_leagues[idx:idx + count])
         idx += count
 
-    n_leagues = len(grouped_by_league)
-    fig, axes = plt.subplots(1, n_leagues, figsize=(6 * n_leagues, 6), squeeze=False)
-
+    # Render each league in its own figure
     for league_idx, league_groups in enumerate(grouped_by_league):
-        all_teams = []
         all_vectors = []
         labels = []
 
         for group_idx, group in enumerate(league_groups):
             for team_name, availability in group.items():
-                all_teams.append(team_name)
                 all_vectors.append(flatten_availability_matrix(availability))
                 labels.append(group_idx)
 
@@ -192,46 +190,45 @@ def plot_all_leagues_clusters(divided_leagues, division_counts, method="tsne"):
         reduced = reducer(all_vectors)
 
         n_groups = len(league_groups)
-        cmap_name = 'tab10' if n_groups <= 10 else 'tab20'
-        cmap = cm.get_cmap(cmap_name, n_groups)
-        colors = [cmap(label) for label in labels]
+        my6 = ["#4daf4a", "#e41a1c", "#377eb8", "#984ea3", "#ff7f00", "#ffff33"]
+        cmap = mcolors.ListedColormap(my6, name="my6")
 
-        ax = axes[0][league_idx]
-        scatter = ax.scatter(
-            reduced[:, 0], reduced[:, 1],
-            color=colors,
-            s=100,
-            edgecolors='k',
-            alpha=0.85
-        )
+        fig, ax = plt.subplots(figsize=(7, 6))
 
-        # Plot centroids for KMeans
+        labels_arr = np.array(labels)
+        for group_id in range(n_groups):
+            mask = labels_arr == group_id
+            ax.scatter(
+                reduced[mask, 0], reduced[mask, 1],
+                color=cmap(group_id),
+                marker=markers[group_id % len(markers)],
+                s=100,
+                edgecolors='k',
+                alpha=0.85
+            )
+
+        # Plot centroids
         if devision_strategy == "knn":
-            group_means = []
             for group_id in range(n_groups):
-                group_points = reduced[np.array(labels) == group_id]
+                group_points = reduced[labels_arr == group_id]
                 centroid = group_points.mean(axis=0)
-                group_means.append(centroid)
+                ax.scatter(*centroid, color=cmap(group_id), marker='X', s=150, edgecolor='white')
 
-            for idx, center in enumerate(group_means):
-                ax.scatter(*center, color=cmap(idx), marker='X', s=150, edgecolor='white')
-
-        #ax.set_title(f"League {league_idx+1}")
-        ax.set_xlabel("Component 1")
-        ax.set_ylabel("Component 2")
+        #ax.set_title(f"Division of L{league_idx + 1}")
+        ax.set_xlabel("Principal Component 1 [-]")
+        ax.set_ylabel("Principal Component 2 [-]")
         ax.grid(True)
 
-        # Legend
         handles = [
-            Line2D([0], [0], marker='o', color='w',
-                   markerfacecolor=cmap(i),
-                   markeredgecolor='k', label=f'Division {i+1}', markersize=10)
+            Line2D([0], [0], marker=markers[i % len(markers)], color='w',
+                   markerfacecolor=cmap(i), markeredgecolor='k',
+                   label=f'Division {i + 1}', markersize=10)
             for i in range(n_groups)
         ]
-        ax.legend(handles=handles, loc='best')#, title='Divisions')
+        ax.legend(handles=handles, loc='best')
 
-    plt.tight_layout()
-    plt.show()
+        plt.tight_layout()
+        plt.show()
 
 def calculate_division_counts(league, max_group_size):
     n = len(league)
